@@ -1,59 +1,247 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Passport</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pint Signal Passport</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-<div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand-title">Pub Passport</div>
-    <div class="menu">
-      <a href="index.html">Map</a>
-    </div>
-  </div>
-</div>
-
-<div class="page">
-
-  <div class="card">
-    <div class="panel-title">Exploration</div>
-    <div class="big-number" id="percent">0%</div>
-
-    <div class="progress-bar">
-      <div class="progress-fill" id="bar"></div>
-    </div>
-
-    <div class="stat-row">
-      <div class="stat">
-        <strong id="visited">0</strong>
-        <span>Pubs</span>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pub Passport</div>
+        <div class="brand-subtitle">District progress across Westminster</div>
       </div>
 
-      <div class="stat">
-        <strong id="signals">0</strong>
-        <span>Signals</span>
+      <nav class="menu">
+        <a href="index.html">Map</a>
+        <a href="passport.html">Passport</a>
+        <a href="leaderboard.html">Leaderboard</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="page page-narrow">
+    <div class="card">
+      <div class="panel-title">Exploration</div>
+      <div class="big-number" id="passportPercent">0%</div>
+
+      <div class="progress-bar">
+        <div class="progress-fill" id="passportBar" style="width:0%"></div>
       </div>
+
+      <div class="stat-row">
+        <div class="stat">
+          <strong id="visitedCount">0</strong>
+          <span>Visited pubs</span>
+        </div>
+        <div class="stat">
+          <strong id="signalCount">0</strong>
+          <span>Signals online</span>
+        </div>
+        <div class="stat">
+          <strong id="xpCount">0</strong>
+          <span>XP</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="panel-title">District Completion</div>
+      <div id="districtProgressList"></div>
+    </div>
+
+    <div class="card">
+      <div class="panel-title">All Stampable Pubs</div>
+      <div class="panel-sub">Jump straight to any pub in the live dataset</div>
+
+      <div style="margin-top:12px;">
+        <select id="pubSelect" class="passport-select">
+          <option value="">Choose a pub...</option>
+        </select>
+      </div>
+
+      <div style="margin-top:12px;">
+        <button id="openPubButton">Open Pub Page</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="panel-title">Visited Pubs</div>
+      <div id="visitedPubList"></div>
     </div>
   </div>
 
-</div>
+  <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
+    import { signals } from "./signals.js";
+    import { districts, getDistrictForPub } from "./districts.js";
 
-<script>
-let visited = JSON.parse(localStorage.getItem("visitedPubs")||"[]");
-let signals = JSON.parse(localStorage.getItem("signals")||"[]");
+    const STORAGE_KEYS = {
+      signals: "pint_signal_unlocked_signals",
+      visited: "pint_signal_visited_pubs",
+      xp: "pint_signal_xp",
+      rare: "pint_signal_rare_assignments"
+    };
 
-let total = 100;
+    const unlockedSignals = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.signals) || "[]"));
+    const visitedPubs = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.visited) || "[]"));
+    const xp = Number(localStorage.getItem(STORAGE_KEYS.xp) || "0");
+    const rareAssignments = JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}");
 
-let percent = Math.floor((visited.length/total)*100);
+    function getStoredCoords(pubId) {
+      const raw = localStorage.getItem(`pubcoords_${pubId}`);
+      if (!raw) return null;
 
-document.getElementById("percent").innerText = percent+"%";
-document.getElementById("bar").style.width = percent+"%";
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          !Number.isNaN(parsed.lat) &&
+          !Number.isNaN(parsed.lng)
+        ) {
+          return parsed;
+        }
+      } catch (error) {}
 
-document.getElementById("visited").innerText = visited.length;
-document.getElementById("signals").innerText = signals.length;
-</script>
+      return null;
+    }
 
+    function hasCoordinates(pub) {
+      return (
+        typeof pub.lat === "number" &&
+        typeof pub.lng === "number" &&
+        !Number.isNaN(pub.lat) &&
+        !Number.isNaN(pub.lng)
+      );
+    }
+
+    function getResolvedPubs() {
+      return westminsterPubs.map(pub => {
+        if (hasCoordinates(pub)) return pub;
+
+        const stored = getStoredCoords(pub.id);
+        if (stored) {
+          return {
+            ...pub,
+            lat: stored.lat,
+            lng: stored.lng
+          };
+        }
+
+        return pub;
+      });
+    }
+
+    function getPubRarity(pub) {
+      return rareAssignments[pub.id] || "common";
+    }
+
+    const pubs = getResolvedPubs();
+    const visitedPubRecords = pubs.filter(pub => visitedPubs.has(pub.id));
+
+    const passportPercentEl = document.getElementById("passportPercent");
+    const passportBarEl = document.getElementById("passportBar");
+    const visitedCountEl = document.getElementById("visitedCount");
+    const signalCountEl = document.getElementById("signalCount");
+    const xpCountEl = document.getElementById("xpCount");
+    const districtProgressListEl = document.getElementById("districtProgressList");
+    const visitedPubListEl = document.getElementById("visitedPubList");
+    const pubSelectEl = document.getElementById("pubSelect");
+    const openPubButtonEl = document.getElementById("openPubButton");
+
+    function renderOverview() {
+      const percent = pubs.length ? (visitedPubRecords.length / pubs.length) * 100 : 0;
+
+      passportPercentEl.textContent = `${percent.toFixed(1)}%`;
+      passportBarEl.style.width = `${percent}%`;
+      visitedCountEl.textContent = String(visitedPubRecords.length);
+      signalCountEl.textContent = String(unlockedSignals.size);
+      xpCountEl.textContent = String(xp);
+    }
+
+    function renderDistrictProgress() {
+      districtProgressListEl.innerHTML = districts.map(district => {
+        const districtSignals = signals.filter(signal => signal.districtId === district.id);
+        const districtPubs = pubs.filter(pub => getDistrictForPub(pub) === district.id);
+        const districtVisited = districtPubs.filter(pub => visitedPubs.has(pub.id));
+        const unlockedCount = districtSignals.filter(signal => unlockedSignals.has(signal.id)).length;
+        const percent = districtPubs.length ? (districtVisited.length / districtPubs.length) * 100 : 0;
+
+        return `
+          <div class="district-row">
+            <div class="district-row-top">
+              <div class="district-name-wrap">
+                <span class="district-dot" style="background:${district.color};"></span>
+                <strong>${district.name}</strong>
+              </div>
+              <span class="district-status ${unlockedCount > 0 ? "district-online" : "district-offline"}">
+                ${unlockedCount > 0 ? "Online" : "Locked"}
+              </span>
+            </div>
+
+            <div class="district-meta">
+              Signals ${unlockedCount}/${districtSignals.length} · Pubs ${districtVisited.length}/${districtPubs.length}
+            </div>
+
+            <div class="district-progress-bar">
+              <div
+                class="district-progress-fill"
+                style="width:${percent}%; background:${district.color};"
+              ></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderVisitedPubs() {
+      if (visitedPubRecords.length === 0) {
+        visitedPubListEl.innerHTML = `<div class="empty-state">No pubs discovered yet.</div>`;
+        return;
+      }
+
+      const sorted = [...visitedPubRecords].sort((a, b) => a.name.localeCompare(b.name));
+
+      visitedPubListEl.innerHTML = sorted.map(pub => {
+        const rarity = getPubRarity(pub);
+
+        return `
+          <button class="stack-card pub-list-card" onclick="window.location.href='pub.html?id=${encodeURIComponent(pub.id)}'">
+            <div class="stack-title">${pub.name}</div>
+            <div class="stack-meta">${pub.address || ""}</div>
+            <div class="stack-meta">Rarity: ${rarity}</div>
+          </button>
+        `;
+      }).join("");
+    }
+
+    function renderPubSelect() {
+      const sorted = [...pubs].sort((a, b) => a.name.localeCompare(b.name));
+
+      pubSelectEl.innerHTML = `
+        <option value="">Choose a pub...</option>
+        ${sorted.map(pub => {
+          const district = districts.find(d => d.id === getDistrictForPub(pub));
+          return `<option value="${pub.id}">${pub.name}${district ? ` — ${district.name}` : ""}</option>`;
+        }).join("")}
+      `;
+    }
+
+    function openSelectedPub() {
+      const pubId = pubSelectEl.value;
+      if (!pubId) return;
+      window.location.href = `pub.html?id=${encodeURIComponent(pubId)}`;
+    }
+
+    openPubButtonEl.addEventListener("click", openSelectedPub);
+
+    renderOverview();
+    renderDistrictProgress();
+    renderPubSelect();
+    renderVisitedPubs();
+  </script>
 </body>
 </html>
