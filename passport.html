@@ -3,190 +3,287 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Passport • Pint Signal</title>
+  <title>Pub Passport • Pint Signal</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-<header class="topbar">
-  <div class="topbar-inner">
-    <div>
-      <div class="brand-title">🪪 Pub Passport</div>
-      <div class="brand-subtitle">Your progress across Westminster</div>
-    </div>
-
-    <nav class="menu">
-      <a href="index.html">Home</a>
-      <a href="passport.html">Passport</a>
-    </nav>
-  </div>
-</header>
-
-<main class="page">
-
-  <section class="panel">
-    <div class="panel-header">
-      <h2>Your Progress</h2>
-    </div>
-
-    <div id="passportStats" class="totaliser-card">
-      Loading...
-    </div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-header">
-      <h2>Visited Pubs</h2>
-    </div>
-
-    <div id="visitedList" class="stack-list"></div>
-  </section>
-
-</main>
-
-<script type="module">
-import { westminsterPubs } from "./westminster-pubs.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  getDocs
-} from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-import {
-  getAuth,
-  signInAnonymously
-} from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
-
-/* =============================
-   FIREBASE
-============================= */
-
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "pintsignal.firebaseapp.com",
-  projectId: "pintsignal"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-/* =============================
-   ELEMENTS
-============================= */
-
-const statsEl = document.getElementById("passportStats");
-const visitedListEl = document.getElementById("visitedList");
-
-/* =============================
-   COVERAGE CALCULATION
-============================= */
-
-function calculateCoverage(visitedPubs) {
-  const totalPubs = westminsterPubs.length;
-  const visitedCount = visitedPubs.length;
-
-  // simple % for MVP (grid later)
-  const percent = totalPubs === 0 ? 0 : (visitedCount / totalPubs) * 100;
-
-  // rough area estimate (200m radius per pub)
-  const areaPerPub = Math.PI * (0.2 * 0.2); // km²
-  const totalArea = visitedCount * areaPerPub;
-
-  return {
-    percent: percent.toFixed(1),
-    area: totalArea.toFixed(2),
-    visitedCount,
-    totalPubs
-  };
-}
-
-/* =============================
-   LOAD DATA
-============================= */
-
-async function loadPassport() {
-  await signInAnonymously(auth);
-
-  const snap = await getDocs(collection(db, "checkins"));
-
-  const uniquePubIds = new Set();
-
-  snap.forEach(doc => {
-    const data = doc.data();
-    if (data.pubId) {
-      uniquePubIds.add(data.pubId);
-    }
-  });
-
-  const visitedPubs = westminsterPubs.filter(pub =>
-    uniquePubIds.has(pub.id)
-  );
-
-  const stats = calculateCoverage(visitedPubs);
-
-  renderStats(stats);
-  renderVisited(visitedPubs);
-}
-
-/* =============================
-   RENDER
-============================= */
-
-function renderStats(stats) {
-  statsEl.innerHTML = `
-    <div class="hero-title">${stats.percent}% uncovered</div>
-
-    <div class="stats-row">
-      <div class="mini-stat">
-        <div class="mini-stat-label">Visited</div>
-        <div class="mini-stat-value">${stats.visitedCount}</div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">🪪 Pub Passport</div>
+        <div class="brand-subtitle">Your progress across Westminster</div>
       </div>
 
-      <div class="mini-stat">
-        <div class="mini-stat-label">Total pubs</div>
-        <div class="mini-stat-value">${stats.totalPubs}</div>
+      <nav class="menu">
+        <a href="index.html">Home</a>
+        <a href="passport.html">Passport</a>
+        <a href="activity.html">Activity</a>
+        <a href="leaderboard.html">Leaderboard</a>
+        <a href="add-pub.html">Add a Pub</a>
+        <a href="calculator.html">Calculator</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Your Progress</h2>
+        <p>Your personal uncovering progress across Westminster</p>
       </div>
 
-      <div class="mini-stat">
-        <div class="mini-stat-label">Area revealed</div>
-        <div class="mini-stat-value">${stats.area} km²</div>
+      <div id="passportStats" class="totaliser-card">
+        Loading...
       </div>
-    </div>
+    </section>
 
-    <div class="comparison-line">
-      Keep exploring to uncover more of Westminster 🍺
-    </div>
-  `;
-}
+    <section class="panel">
+      <div class="panel-header">
+        <h2>All Stampable Pubs</h2>
+        <p>Jump to any pub in the Westminster list</p>
+      </div>
 
-function renderVisited(pubs) {
-  visitedListEl.innerHTML = "";
+      <div class="info-card">
+        <div class="form-grid single-column">
+          <label class="form-field">
+            <span>Select pub</span>
+            <select id="pubSelect" class="passport-select">
+              <option value="">Choose a pub...</option>
+            </select>
+          </label>
+        </div>
 
-  if (pubs.length === 0) {
-    visitedListEl.innerHTML = `<div class="empty-state">No pubs visited yet</div>`;
-    return;
-  }
+        <div class="controls-row">
+          <button onclick="openSelectedPub()">Open Pub Page</button>
+        </div>
 
-  pubs.forEach(pub => {
-    const el = document.createElement("div");
-    el.className = "stack-card";
+        <div id="selectStatus" class="stack-meta top-gap">All pubs in the dataset can be stamped once visited.</div>
+      </div>
+    </section>
 
-    el.innerHTML = `
-      <div class="stack-title">${pub.name}</div>
-      <div class="stack-meta">${pub.address || ""}</div>
-    `;
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Visited Pubs</h2>
+        <p>Your collected passport stamps</p>
+      </div>
 
-    el.onclick = () => {
-      window.location.href = `pub.html?id=${pub.id}`;
+      <div id="visitedList" class="stack-list"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    import {
+      getAuth,
+      signInAnonymously
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+      authDomain: "pintsignal.firebaseapp.com",
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
     };
 
-    visitedListEl.appendChild(el);
-  });
-}
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-loadPassport();
-</script>
+    const statsEl = document.getElementById("passportStats");
+    const visitedListEl = document.getElementById("visitedList");
+    const pubSelectEl = document.getElementById("pubSelect");
 
+    const REVEAL_RADIUS_KM = 0.2;
+
+    function getResolvedPubs() {
+      return westminsterPubs.map(pub => {
+        if (
+          typeof pub.lat === "number" &&
+          typeof pub.lng === "number" &&
+          !Number.isNaN(pub.lat) &&
+          !Number.isNaN(pub.lng)
+        ) {
+          return pub;
+        }
+
+        const cached = localStorage.getItem(`pubcoords_${pub.id}`);
+        if (!cached) return pub;
+
+        try {
+          const parsed = JSON.parse(cached);
+          if (
+            typeof parsed.lat === "number" &&
+            typeof parsed.lng === "number" &&
+            !Number.isNaN(parsed.lat) &&
+            !Number.isNaN(parsed.lng)
+          ) {
+            return {
+              ...pub,
+              lat: parsed.lat,
+              lng: parsed.lng
+            };
+          }
+        } catch (error) {}
+
+        return pub;
+      });
+    }
+
+    function formatPercent(value) {
+      return `${Number(value).toFixed(1)}%`;
+    }
+
+    function calculateCoverage(visitedPubs, allPubs) {
+      const totalPubs = allPubs.length;
+      const visitedCount = visitedPubs.length;
+
+      const percent = totalPubs === 0 ? 0 : (visitedCount / totalPubs) * 100;
+
+      const areaPerPubKm2 = Math.PI * REVEAL_RADIUS_KM * REVEAL_RADIUS_KM;
+      const totalArea = visitedCount * areaPerPubKm2;
+
+      return {
+        percent,
+        area: totalArea,
+        visitedCount,
+        totalPubs
+      };
+    }
+
+    function populatePubDropdown(allPubs) {
+      pubSelectEl.innerHTML = `<option value="">Choose a pub...</option>`;
+
+      const sorted = [...allPubs].sort((a, b) => a.name.localeCompare(b.name));
+
+      sorted.forEach(pub => {
+        const option = document.createElement("option");
+        option.value = pub.id;
+        option.textContent = `${pub.name} — ${pub.area || "Westminster"}`;
+        pubSelectEl.appendChild(option);
+      });
+    }
+
+    function renderStats(stats) {
+      statsEl.innerHTML = `
+        <div class="hero-badge">Passport Progress</div>
+        <div class="hero-title">${formatPercent(stats.percent)} uncovered</div>
+        <div class="stack-meta">Keep visiting new pubs to expand your coverage</div>
+
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Visited pubs</div>
+            <div class="mini-stat-value">${stats.visitedCount}</div>
+          </div>
+
+          <div class="mini-stat">
+            <div class="mini-stat-label">Stampable pubs</div>
+            <div class="mini-stat-value">${stats.totalPubs}</div>
+          </div>
+
+          <div class="mini-stat">
+            <div class="mini-stat-label">Revealed area</div>
+            <div class="mini-stat-value">${stats.area.toFixed(2)} km²</div>
+          </div>
+        </div>
+
+        <div class="passport-progress-wrap">
+          <div class="passport-progress-bar">
+            <div class="passport-progress-fill" style="width:${Math.min(stats.percent, 100)}%"></div>
+          </div>
+          <div class="stack-meta">${formatPercent(stats.percent)} of the current Westminster pub list uncovered</div>
+        </div>
+
+        <div class="comparison-line compact">
+          Unique visited pubs drive uncovering. Repeated visits still count for activity, but not extra reveal.
+        </div>
+      `;
+    }
+
+    function renderVisited(visitedPubs) {
+      visitedListEl.innerHTML = "";
+
+      if (visitedPubs.length === 0) {
+        visitedListEl.innerHTML = `<div class="empty-state">No pubs visited yet.</div>`;
+        return;
+      }
+
+      const sorted = [...visitedPubs].sort((a, b) => a.name.localeCompare(b.name));
+
+      sorted.forEach(pub => {
+        const el = document.createElement("button");
+        el.className = "stack-card pub-list-card";
+        el.type = "button";
+
+        el.innerHTML = `
+          <div class="stack-title">${pub.name}</div>
+          <div class="stack-meta">${pub.address || ""}</div>
+        `;
+
+        el.onclick = () => {
+          window.location.href = `pub.html?id=${encodeURIComponent(pub.id)}`;
+        };
+
+        visitedListEl.appendChild(el);
+      });
+    }
+
+    async function loadPassport() {
+      try {
+        const authResult = await signInAnonymously(auth);
+        const uid = authResult.user.uid;
+
+        const checkinsSnap = await getDocs(collection(db, "checkins"));
+
+        const uniquePubIds = new Set();
+
+        checkinsSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.userId === uid && data.pubId) {
+            uniquePubIds.add(data.pubId);
+          }
+        });
+
+        const allPubs = getResolvedPubs();
+        const visitedPubs = allPubs.filter(pub => uniquePubIds.has(pub.id));
+
+        const stats = calculateCoverage(visitedPubs, allPubs);
+
+        renderStats(stats);
+        populatePubDropdown(allPubs);
+        renderVisited(visitedPubs);
+      } catch (error) {
+        console.error(error);
+        statsEl.innerHTML = `
+          <div class="empty-state">
+            Could not load passport.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+        visitedListEl.innerHTML = `
+          <div class="empty-state">
+            Could not load visited pubs.
+          </div>
+        `;
+      }
+    }
+
+    function openSelectedPub() {
+      const value = pubSelectEl.value;
+      if (!value) return;
+      window.location.href = `pub.html?id=${encodeURIComponent(value)}`;
+    }
+
+    window.openSelectedPub = openSelectedPub;
+
+    loadPassport();
+  </script>
 </body>
 </html>
