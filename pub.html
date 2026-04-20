@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pub</title>
+  <title>Pint Signal Pub</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -20,6 +20,7 @@
         <a href="activity.html">Activity</a>
         <a href="leaderboard.html">Leaderboard</a>
         <a href="add-pub.html">Add a Pub</a>
+        <a href="calculator.html">Calculator</a>
       </nav>
     </div>
   </header>
@@ -27,39 +28,80 @@
   <main class="page page-narrow">
     <section class="panel">
       <a href="index.html" class="back-link">← Back to map</a>
-      <div id="hero" class="place-card loading-card">Loading pub...</div>
+      <div id="pubHero" class="pub-hero-card">Loading pub...</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Latest Pint</h2>
+        <p>The most recent price submitted for this pub</p>
+      </div>
+      <div id="latestPriceCard" class="info-card">Loading latest price...</div>
     </section>
 
     <section class="panel">
       <div class="panel-header">
         <h2>Actions</h2>
-        <p>Check in and submit the latest pint price</p>
+        <p>Check in and submit a fresh price</p>
       </div>
 
-      <div class="controls-row">
-        <button onclick="checkIn()">Check In</button>
+      <div class="action-grid">
+        <div class="info-card">
+          <div class="mini-section-title">Check In</div>
+          <div id="checkInStatus" class="stack-meta">Loading status...</div>
+          <div class="controls-row">
+            <button onclick="checkIn()">Check In Here</button>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <div class="mini-section-title">Directions</div>
+          <div class="stack-meta">Open this pub in your maps app</div>
+          <div class="controls-row">
+            <button onclick="openDirections()">Open Directions</button>
+          </div>
+        </div>
       </div>
 
-      <div class="form-grid form-grid-top">
-        <label class="form-field">
-          <span>Drink</span>
-          <input id="drink" placeholder="Drink" />
-        </label>
+      <div class="info-card form-card">
+        <div class="mini-section-title">Submit Pint Price</div>
 
-        <label class="form-field">
-          <span>Price (£)</span>
-          <input id="price" placeholder="Price" type="number" step="0.01" min="0" />
-        </label>
-      </div>
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Drink</span>
+            <input id="drink" type="text" placeholder="e.g. Guinness" />
+          </label>
 
-      <div class="controls-row">
-        <button onclick="submit()">Submit Price</button>
+          <label class="form-field">
+            <span>Price (£)</span>
+            <input id="price" type="number" step="0.01" min="0" placeholder="e.g. 6.80" />
+          </label>
+
+          <label class="form-field full-width">
+            <span>Optional note</span>
+            <input id="note" type="text" placeholder="e.g. Pint of Madri" />
+          </label>
+        </div>
+
+        <div class="controls-row">
+          <button onclick="submitPrice()">Submit Price</button>
+        </div>
+
+        <div id="submitStatus" class="stack-meta form-status">Ready.</div>
       </div>
     </section>
 
     <section class="panel">
       <div class="panel-header">
-        <h2>History</h2>
+        <h2>Where Your Money Goes</h2>
+        <p>Based on the latest submitted pint at this pub</p>
+      </div>
+      <div id="moneyBreakdownCard" class="info-card">No price data yet.</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Price History</h2>
         <p>Recent submitted prices for this pub</p>
       </div>
       <div id="history" class="stack-list"></div>
@@ -77,6 +119,7 @@
       query,
       where,
       orderBy,
+      limit,
       getDocs
     } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
     import {
@@ -84,66 +127,274 @@
       signInAnonymously
     } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
-    const app = initializeApp({
+    const firebaseConfig = {
       apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
       authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal"
-    });
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+    };
 
+    const CHECKIN_RADIUS_METERS = 50;
+
+    const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    const id = new URLSearchParams(location.search).get("id");
-    const heroEl = document.getElementById("hero");
+    const pubId = new URLSearchParams(window.location.search).get("id");
+
+    const pubHeroEl = document.getElementById("pubHero");
+    const latestPriceCardEl = document.getElementById("latestPriceCard");
+    const moneyBreakdownCardEl = document.getElementById("moneyBreakdownCard");
     const historyEl = document.getElementById("history");
+    const checkInStatusEl = document.getElementById("checkInStatus");
+    const submitStatusEl = document.getElementById("submitStatus");
 
-    let user;
-    let pub;
+    let currentUser = null;
+    let pub = null;
+    let latestPrice = null;
+    let userPosition = null;
 
-    async function load() {
-      const authResult = await signInAnonymously(auth);
-      user = authResult.user;
+    function formatMoney(value) {
+      return `£${Number(value).toFixed(2)}`;
+    }
 
-      const pubDoc = await getDoc(doc(db, "pubs", id));
+    function formatTimeAgo(timestampMs) {
+      const safeTime = Number(timestampMs || 0);
+      if (!safeTime) return "Unknown time";
 
-      if (!pubDoc.exists()) {
-        heroEl.innerHTML = "Pub not found.";
+      const diffMs = Date.now() - safeTime;
+      const diffMinutes = Math.floor(diffMs / 60000);
+
+      if (diffMinutes < 1) return "just now";
+      if (diffMinutes === 1) return "1 minute ago";
+      if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours === 1) return "1 hour ago";
+      if (diffHours < 24) return `${diffHours} hours ago`;
+
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return "1 day ago";
+      return `${diffDays} days ago`;
+    }
+
+    function toRadians(value) {
+      return (value * Math.PI) / 180;
+    }
+
+    function distanceInMeters(lat1, lng1, lat2, lng2) {
+      const earthRadius = 6371000;
+      const dLat = toRadians(lat2 - lat1);
+      const dLng = toRadians(lng2 - lng1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRadians(lat1)) *
+          Math.cos(toRadians(lat2)) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(earthRadius * c);
+    }
+
+    function calculatePintEconomics(salePrice) {
+      const price = Number(salePrice);
+      const vat = price * 0.20;
+      const beerDuty = 0.60;
+      const beerCost = 1.50;
+      const overheads = 3.00;
+      const governmentRevenue = vat + beerDuty;
+      const pubSurplus = price - vat - beerDuty - beerCost - overheads;
+
+      return {
+        salePrice: price,
+        vat,
+        beerDuty,
+        beerCost,
+        overheads,
+        governmentRevenue,
+        pubSurplus
+      };
+    }
+
+    function buildMoneyBarHtml(result) {
+      const parts = [
+        { label: "Government", value: Math.max(result.governmentRevenue, 0), className: "money-gov" },
+        { label: "Beer cost", value: Math.max(result.beerCost, 0), className: "money-beer" },
+        { label: "Overheads", value: Math.max(result.overheads, 0), className: "money-overheads" },
+        { label: "Pub surplus", value: Math.max(result.pubSurplus, 0), className: "money-pub" }
+      ];
+
+      const total = parts.reduce((sum, part) => sum + part.value, 0);
+
+      const barHtml = parts
+        .filter(part => part.value > 0)
+        .map(part => {
+          const width = total > 0 ? (part.value / total) * 100 : 0;
+          return `<div class="${part.className}" style="width:${width}%"></div>`;
+        })
+        .join("");
+
+      const legendHtml = parts
+        .map(part => `
+          <div class="money-legend-item">
+            <span class="money-legend-label"><span class="money-dot ${part.className}"></span>${part.label}</span>
+            <strong>${formatMoney(part.value)}</strong>
+          </div>
+        `)
+        .join("");
+
+      return `
+        <div class="money-bar">${barHtml}</div>
+        <div class="money-legend">${legendHtml}</div>
+      `;
+    }
+
+    function renderCheckInStatus() {
+      if (!pub) {
+        checkInStatusEl.textContent = "Loading pub...";
         return;
       }
 
-      pub = pubDoc.data();
+      if (!userPosition) {
+        checkInStatusEl.textContent = "Allow location to enable nearby check-ins.";
+        return;
+      }
 
-      heroEl.className = "place-card";
-      heroEl.innerHTML = `
-        <div class="place-card-top">
-          <div class="place-emoji">🍺</div>
-          <div class="place-head">
-            <div class="place-title">${pub.name}</div>
-            <div class="place-subtitle">${pub.area || "Westminster"}</div>
+      const distance = distanceInMeters(
+        userPosition.lat,
+        userPosition.lng,
+        Number(pub.lat),
+        Number(pub.lng)
+      );
+
+      if (distance <= CHECKIN_RADIUS_METERS) {
+        checkInStatusEl.textContent = `You are ${distance}m away. You can check in.`;
+      } else {
+        checkInStatusEl.textContent = `You are ${distance}m away. Move within ${CHECKIN_RADIUS_METERS}m to check in.`;
+      }
+    }
+
+    async function loadPub() {
+      if (!pubId) {
+        pubHeroEl.innerHTML = `<div class="empty-state">No pub selected.</div>`;
+        return;
+      }
+
+      const pubDoc = await getDoc(doc(db, "pubs", pubId));
+
+      if (!pubDoc.exists()) {
+        pubHeroEl.innerHTML = `<div class="empty-state">Pub not found.</div>`;
+        return;
+      }
+
+      pub = {
+        id: pubDoc.id,
+        ...pubDoc.data()
+      };
+
+      const tags = Array.isArray(pub.tags) ? pub.tags : [];
+
+      pubHeroEl.innerHTML = `
+        <div class="pub-hero-top">
+          <div class="pub-hero-emoji">🍺</div>
+          <div>
+            <div class="hero-title">${pub.name}</div>
+            <div class="stack-meta">${pub.area || "Westminster"}</div>
           </div>
         </div>
 
-        <div class="place-chip-row">
-          ${(pub.tags || []).map(tag => `<span class="place-chip">${tag}</span>`).join("")}
+        <div class="pub-chip-row">
+          ${tags.length ? tags.map(tag => `<span class="pub-chip">${tag}</span>`).join("") : '<span class="pub-chip">pub</span>'}
         </div>
 
-        <div class="place-stats">
-          <div class="place-stat">
-            <div class="place-stat-label">Latitude</div>
-            <div class="place-stat-value">${Number(pub.lat).toFixed(4)}</div>
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Latitude</div>
+            <div class="mini-stat-value">${Number(pub.lat).toFixed(4)}</div>
           </div>
-          <div class="place-stat">
-            <div class="place-stat-label">Longitude</div>
-            <div class="place-stat-value">${Number(pub.lng).toFixed(4)}</div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Longitude</div>
+            <div class="mini-stat-value">${Number(pub.lng).toFixed(4)}</div>
           </div>
-          <div class="place-stat">
-            <div class="place-stat-label">Game Value</div>
-            <div class="place-stat-value">Passport Stamp</div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Passport</div>
+            <div class="mini-stat-value">Stampable</div>
           </div>
         </div>
       `;
 
-      await loadHistory();
+      renderCheckInStatus();
+    }
+
+    async function loadLatestPrice() {
+      const q = query(
+        collection(db, "prices"),
+        where("pubId", "==", pubId),
+        orderBy("createdAtMs", "desc"),
+        limit(1)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        latestPrice = null;
+        latestPriceCardEl.innerHTML = `<div class="empty-state">No price submitted yet for this pub.</div>`;
+        moneyBreakdownCardEl.innerHTML = `<div class="empty-state">No latest price to analyse yet.</div>`;
+        return;
+      }
+
+      latestPrice = snapshot.docs[0].data();
+
+      latestPriceCardEl.innerHTML = `
+        <div class="hero-badge">Latest Pint</div>
+        <div class="stack-title">${latestPrice.drinkName || "Drink"}</div>
+        <div class="stack-price">${formatMoney(latestPrice.price)}</div>
+        <div class="stack-meta">${latestPrice.note || "User submitted price"} • ${formatTimeAgo(latestPrice.createdAtMs)}</div>
+      `;
+
+      const economics = calculatePintEconomics(latestPrice.price);
+
+      moneyBreakdownCardEl.innerHTML = `
+        <div class="hero-badge">Money Split</div>
+        <div class="hero-title">${formatMoney(economics.salePrice)} pint</div>
+
+        ${buildMoneyBarHtml(economics)}
+
+        <div class="breakdown-grid">
+          <div class="breakdown-row">
+            <span>VAT</span>
+            <strong>${formatMoney(economics.vat)}</strong>
+          </div>
+          <div class="breakdown-row">
+            <span>Beer duty</span>
+            <strong>${formatMoney(economics.beerDuty)}</strong>
+          </div>
+          <div class="breakdown-row">
+            <span>Beer cost</span>
+            <strong>${formatMoney(economics.beerCost)}</strong>
+          </div>
+          <div class="breakdown-row">
+            <span>Overheads</span>
+            <strong>${formatMoney(economics.overheads)}</strong>
+          </div>
+          <div class="breakdown-row total government">
+            <span>Government revenue</span>
+            <strong>${formatMoney(economics.governmentRevenue)}</strong>
+          </div>
+          <div class="breakdown-row total pub-side">
+            <span>Estimated pub surplus after costs</span>
+            <strong>${formatMoney(economics.pubSurplus)}</strong>
+          </div>
+        </div>
+
+        <div class="comparison-line">
+          Government <strong>${formatMoney(economics.governmentRevenue)}</strong> vs Pub side <strong>${formatMoney(economics.pubSurplus)}</strong> per pint
+        </div>
+      `;
     }
 
     async function loadHistory() {
@@ -151,74 +402,169 @@
 
       const q = query(
         collection(db, "prices"),
-        where("pubId", "==", id),
-        orderBy("createdAtMs", "desc")
+        where("pubId", "==", pubId),
+        orderBy("createdAtMs", "desc"),
+        limit(20)
       );
 
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
-        historyEl.innerHTML = `<div class="empty-state">No prices submitted yet.</div>`;
+        historyEl.innerHTML = `<div class="empty-state">No price history yet.</div>`;
         return;
       }
 
       snapshot.forEach(doc => {
         const data = doc.data();
-        const div = document.createElement("div");
-        div.className = "stack-card";
-        div.innerHTML = `
-          <div class="stack-title">${data.drinkName} • £${Number(data.price).toFixed(2)}</div>
-          <div class="stack-meta">${data.note || "User submitted price"}</div>
+        const row = document.createElement("div");
+        row.className = "stack-card";
+        row.innerHTML = `
+          <div class="stack-title">${data.drinkName || "Drink"} • ${formatMoney(data.price)}</div>
+          <div class="stack-meta">${data.note || "User submitted price"} • ${formatTimeAgo(data.createdAtMs)}</div>
         `;
-        historyEl.appendChild(div);
+        historyEl.appendChild(row);
       });
     }
 
-    async function submit() {
-      const drinkInput = document.getElementById("drink");
-      const priceInput = document.getElementById("price");
-
-      const drinkName = drinkInput.value.trim();
-      const priceValue = Number(priceInput.value);
-
-      if (!drinkName) {
-        alert("Enter a drink name.");
+    async function submitPrice() {
+      if (!pub || !currentUser) {
+        submitStatusEl.textContent = "Pub or user not ready yet.";
         return;
       }
 
-      if (Number.isNaN(priceValue) || priceValue <= 0) {
-        alert("Enter a valid price.");
+      const drink = document.getElementById("drink").value.trim();
+      const price = Number(document.getElementById("price").value);
+      const note = document.getElementById("note").value.trim();
+
+      if (!drink) {
+        submitStatusEl.textContent = "Enter a drink name.";
         return;
       }
 
-      await addDoc(collection(db, "prices"), {
-        pubId: id,
-        pubName: pub.name,
-        userId: user.uid,
-        drinkName,
-        price: priceValue,
-        createdAtMs: Date.now()
-      });
+      if (Number.isNaN(price) || price <= 0) {
+        submitStatusEl.textContent = "Enter a valid price.";
+        return;
+      }
 
-      alert("+15 XP");
-      location.reload();
+      try {
+        await addDoc(collection(db, "prices"), {
+          pubId,
+          pubName: pub.name,
+          userId: currentUser.uid,
+          drinkName: drink,
+          price,
+          note,
+          createdAtMs: Date.now()
+        });
+
+        document.getElementById("drink").value = "";
+        document.getElementById("price").value = "";
+        document.getElementById("note").value = "";
+
+        submitStatusEl.textContent = "Price submitted.";
+        await loadLatestPrice();
+        await loadHistory();
+      } catch (error) {
+        console.error(error);
+        submitStatusEl.textContent = `Submit failed: ${error.message || "Unknown error"}`;
+      }
     }
 
     async function checkIn() {
-      await addDoc(collection(db, "checkins"), {
-        pubId: id,
-        pubName: pub.name,
-        userId: user.uid,
-        createdAtMs: Date.now()
-      });
+      if (!pub || !currentUser) {
+        checkInStatusEl.textContent = "Pub or user not ready yet.";
+        return;
+      }
 
-      alert("+10 XP");
+      if (!userPosition) {
+        checkInStatusEl.textContent = "Allow location to check in.";
+        return;
+      }
+
+      const distance = distanceInMeters(
+        userPosition.lat,
+        userPosition.lng,
+        Number(pub.lat),
+        Number(pub.lng)
+      );
+
+      if (distance > CHECKIN_RADIUS_METERS) {
+        checkInStatusEl.textContent = `Too far away. You are ${distance}m from this pub.`;
+        return;
+      }
+
+      try {
+        await addDoc(collection(db, "checkins"), {
+          pubId,
+          pubName: pub.name,
+          userId: currentUser.uid,
+          createdAtMs: Date.now()
+        });
+
+        checkInStatusEl.textContent = "Checked in successfully.";
+      } catch (error) {
+        console.error(error);
+        checkInStatusEl.textContent = `Check-in failed: ${error.message || "Unknown error"}`;
+      }
     }
 
-    window.submit = submit;
-    window.checkIn = checkIn;
+    function openDirections() {
+      if (!pub) return;
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pub.name + " " + (pub.area || ""))}`;
+      window.open(url, "_blank");
+    }
 
-    load();
+    function startLocationWatch() {
+      if (!("geolocation" in navigator)) {
+        renderCheckInStatus();
+        return;
+      }
+
+      navigator.geolocation.watchPosition(
+        position => {
+          userPosition = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          renderCheckInStatus();
+        },
+        () => {
+          renderCheckInStatus();
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 10000,
+          timeout: 10000
+        }
+      );
+    }
+
+    async function start() {
+      try {
+        const authResult = await signInAnonymously(auth);
+        currentUser = authResult.user;
+
+        await loadPub();
+        await loadLatestPrice();
+        await loadHistory();
+        startLocationWatch();
+      } catch (error) {
+        console.error(error);
+
+        pubHeroEl.innerHTML = `
+          <div class="empty-state">
+            Could not load pub page.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+      }
+    }
+
+    window.submitPrice = submitPrice;
+    window.checkIn = checkIn;
+    window.openDirections = openDirections;
+
+    start();
   </script>
 </body>
 </html>
