@@ -1,19 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pint Signal</title>
-  <link rel="stylesheet" href="style.css">
+
+  <link rel="stylesheet" href="style.css" />
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
 </head>
-
 <body>
-  <h1>Pint Signal 🍺</h1>
+  <div class="page">
+    <header class="hero">
+      <h1>Pint Signal 🍺</h1>
+      <p class="subtitle">Live pub map for Westminster</p>
+    </header>
 
-  <div class="button-row">
-    <button onclick="seedPubs()">Load Westminster Pubs</button>
-    <button onclick="clearListOnly()">Refresh List</button>
+    <section class="controls">
+      <button onclick="loadWestminsterPubs()">Load Westminster Pubs</button>
+      <button onclick="refreshPubs()">Refresh Pubs</button>
+      <button onclick="centerOnUser()">Center On Me</button>
+    </section>
+
+    <section class="status-wrap">
+      <div id="status">Loading map...</div>
+    </section>
+
+    <section class="map-wrap">
+      <div id="map"></div>
+    </section>
+
+    <section class="list-wrap">
+      <h2>Pubs</h2>
+      <div id="pubList" class="pub-list"></div>
+    </section>
   </div>
 
-  <ul id="pubList"></ul>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
@@ -38,11 +70,6 @@
       messagingSenderId: "63376472196",
       appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
     };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-    const pubList = document.getElementById("pubList");
 
     const westminsterPubs = [
       {
@@ -82,37 +109,139 @@
       }
     ];
 
-    await signInAnonymously(auth);
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-    async function loadPubs() {
-      pubList.innerHTML = "";
+    const statusEl = document.getElementById("status");
+    const pubListEl = document.getElementById("pubList");
 
-      const snapshot = await getDocs(collection(db, "pubs"));
+    let map;
+    let userMarker = null;
+    let accuracyCircle = null;
+    let pubMarkers = [];
+    let userLatLng = null;
+    let locationWatchId = null;
 
-      if (snapshot.empty) {
-        const li = document.createElement("li");
-        li.textContent = "No pubs loaded yet.";
-        pubList.appendChild(li);
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function toRadians(value) {
+      return (value * Math.PI) / 180;
+    }
+
+    function distanceInMeters(lat1, lng1, lat2, lng2) {
+      const earthRadius = 6371000;
+      const dLat = toRadians(lat2 - lat1);
+      const dLng = toRadians(lng2 - lng1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRadians(lat1)) *
+          Math.cos(toRadians(lat2)) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(earthRadius * c);
+    }
+
+    function formatDistance(meters) {
+      if (meters < 1000) return `${meters}m away`;
+      return `${(meters / 1000).toFixed(2)}km away`;
+    }
+
+    function initMap() {
+      map = L.map("map").setView([51.5007, -0.1290], 15);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      setStatus("Map loaded. Signing in...");
+    }
+
+    function clearPubMarkers() {
+      pubMarkers.forEach(marker => map.removeLayer(marker));
+      pubMarkers = [];
+    }
+
+    function renderPubList(pubs) {
+      pubListEl.innerHTML = "";
+
+      if (pubs.length === 0) {
+        pubListEl.innerHTML = '<div class="empty-state">No pubs found yet.</div>';
         return;
       }
 
-      snapshot.forEach((doc) => {
-        const pub = doc.data();
+      const sortedPubs = [...pubs].sort((a, b) => {
+        if (!userLatLng) return a.name.localeCompare(b.name);
 
-        const li = document.createElement("li");
-        li.className = "pub-item";
+        const distanceA = distanceInMeters(userLatLng.lat, userLatLng.lng, a.lat, a.lng);
+        const distanceB = distanceInMeters(userLatLng.lat, userLatLng.lng, b.lat, b.lng);
+        return distanceA - distanceB;
+      });
+
+      sortedPubs.forEach(pub => {
+        const card = document.createElement("button");
+        card.className = "pub-card";
+        card.type = "button";
 
         const title = document.createElement("div");
         title.className = "pub-name";
-        title.textContent = pub.name || "Unnamed pub";
+        title.textContent = pub.name;
 
         const meta = document.createElement("div");
         meta.className = "pub-meta";
-        meta.textContent = `${pub.area || "Unknown area"} • ${Array.isArray(pub.tags) ? pub.tags.join(", ") : ""}`;
+        meta.textContent = `${pub.area} • ${Array.isArray(pub.tags) ? pub.tags.join(", ") : ""}`;
 
-        li.appendChild(title);
-        li.appendChild(meta);
-        pubList.appendChild(li);
+        const coords = document.createElement("div");
+        coords.className = "pub-coords";
+        coords.textContent = `${pub.lat.toFixed(5)}, ${pub.lng.toFixed(5)}`;
+
+        card.appendChild(title);
+        card.appendChild(meta);
+
+        if (userLatLng) {
+          const distance = distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng);
+          const distanceEl = document.createElement("div");
+          distanceEl.className = "pub-distance";
+          distanceEl.textContent = formatDistance(distance);
+          card.appendChild(distanceEl);
+        }
+
+        card.appendChild(coords);
+
+        card.addEventListener("click", () => {
+          map.setView([pub.lat, pub.lng], 17);
+        });
+
+        pubListEl.appendChild(card);
+      });
+    }
+
+    function renderPubMarkers(pubs) {
+      clearPubMarkers();
+
+      pubs.forEach(pub => {
+        const distanceText = userLatLng
+          ? `<br><strong>${formatDistance(distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng))}</strong>`
+          : "";
+
+        const marker = L.marker([pub.lat, pub.lng]).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width: 180px;">
+            <strong>${pub.name}</strong><br>
+            ${pub.area}<br>
+            ${(pub.tags || []).join(", ")}
+            ${distanceText}
+          </div>
+        `);
+
+        pubMarkers.push(marker);
       });
     }
 
@@ -123,26 +252,144 @@
       return !snapshot.empty;
     }
 
-    async function seedPubs() {
-      for (const pub of westminsterPubs) {
-        const exists = await pubExistsByName(pub.name);
+    async function loadPubsFromFirestore() {
+      setStatus("Loading pubs from Firebase...");
 
-        if (!exists) {
-          await addDoc(collection(db, "pubs"), pub);
+      const snapshot = await getDocs(collection(db, "pubs"));
+      const pubs = [];
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+
+        pubs.push({
+          id: doc.id,
+          name: data.name,
+          area: data.area || "Unknown area",
+          lat: Number(data.lat),
+          lng: Number(data.lng),
+          tags: Array.isArray(data.tags) ? data.tags : []
+        });
+      });
+
+      renderPubMarkers(pubs);
+      renderPubList(pubs);
+
+      setStatus(`Loaded ${pubs.length} pub${pubs.length === 1 ? "" : "s"}.`);
+    }
+
+    async function loadWestminsterPubs() {
+      try {
+        setStatus("Adding Westminster pubs...");
+
+        for (const pub of westminsterPubs) {
+          const exists = await pubExistsByName(pub.name);
+
+          if (!exists) {
+            await addDoc(collection(db, "pubs"), pub);
+          }
         }
+
+        await loadPubsFromFirestore();
+      } catch (error) {
+        console.error(error);
+        setStatus(`Could not add pubs: ${error.message}`);
+      }
+    }
+
+    async function refreshPubs() {
+      try {
+        await loadPubsFromFirestore();
+      } catch (error) {
+        console.error(error);
+        setStatus(`Could not refresh pubs: ${error.message}`);
+      }
+    }
+
+    function updateUserLocation(lat, lng, accuracy) {
+      userLatLng = { lat, lng };
+
+      if (!userMarker) {
+        userMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here");
+      } else {
+        userMarker.setLatLng([lat, lng]);
       }
 
-      await loadPubs();
+      if (!accuracyCircle) {
+        accuracyCircle = L.circle([lat, lng], {
+          radius: accuracy,
+          color: "#2f80ed",
+          fillColor: "#2f80ed",
+          fillOpacity: 0.12
+        }).addTo(map);
+      } else {
+        accuracyCircle.setLatLng([lat, lng]);
+        accuracyCircle.setRadius(accuracy);
+      }
     }
 
-    async function clearListOnly() {
-      await loadPubs();
+    function startLiveLocation() {
+      if (!("geolocation" in navigator)) {
+        setStatus("Geolocation is not supported on this device.");
+        return;
+      }
+
+      setStatus("Requesting your live location...");
+
+      locationWatchId = navigator.geolocation.watchPosition(
+        async position => {
+          const { latitude, longitude, accuracy } = position.coords;
+
+          updateUserLocation(latitude, longitude, accuracy);
+
+          if (map) {
+            map.setView([latitude, longitude], 16);
+          }
+
+          await refreshPubs();
+          setStatus("Live location active.");
+        },
+        error => {
+          console.error(error);
+          setStatus("Location permission was denied or unavailable.");
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 10000,
+          timeout: 10000
+        }
+      );
     }
 
-    window.seedPubs = seedPubs;
-    window.clearListOnly = clearListOnly;
+    function centerOnUser() {
+      if (!userLatLng) {
+        setStatus("Your location is not ready yet.");
+        return;
+      }
 
-    await loadPubs();
+      map.setView([userLatLng.lat, userLatLng.lng], 16);
+      if (userMarker) {
+        userMarker.openPopup();
+      }
+    }
+
+    window.loadWestminsterPubs = loadWestminsterPubs;
+    window.refreshPubs = refreshPubs;
+    window.centerOnUser = centerOnUser;
+
+    async function startApp() {
+      try {
+        initMap();
+        await signInAnonymously(auth);
+        setStatus("Signed in. Loading pubs...");
+        await loadPubsFromFirestore();
+        startLiveLocation();
+      } catch (error) {
+        console.error(error);
+        setStatus(`Startup error: ${error.message}`);
+      }
+    }
+
+    startApp();
   </script>
 </body>
 </html>
