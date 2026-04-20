@@ -25,42 +25,56 @@
   <div id="map"></div>
   <div class="map-fog"></div>
 
-  <div class="panel-floating panel-floating-main">
-    <div class="panel-title">Signal Network</div>
-    <div class="panel-sub">Unlock districts, reveal pubs, and build discovery XP</div>
+  <aside class="hud-card hud-main">
+    <div class="hud-kicker">Signal Network</div>
+    <div class="hud-title">Westminster Survey</div>
+    <div class="hud-subtitle">Unlock Signals, reveal districts, discover pubs.</div>
 
-    <div class="floating-stat-row">
-      <div class="floating-stat">
-        <span>Signals</span>
+    <div class="hud-stats">
+      <div class="hud-stat">
+        <span>Signals online</span>
         <strong id="signalsValue">0 / 0</strong>
       </div>
-      <div class="floating-stat">
-        <span>Visible pubs</span>
-        <strong id="visiblePubsValue">0</strong>
-      </div>
-      <div class="floating-stat">
+      <div class="hud-stat">
         <span>XP</span>
         <strong id="xpValue">0</strong>
       </div>
     </div>
 
+    <div class="hud-progress-label">
+      <span>Network progress</span>
+      <span id="signalsPercentText">0%</span>
+    </div>
     <div class="progress-bar">
       <div class="progress-fill" id="signalsProgressFill" style="width:0%"></div>
     </div>
 
-    <div class="floating-buttons">
-      <button onclick="centerOnUser()">Center on me</button>
-      <button onclick="resetProgress()">Reset progress</button>
+    <div class="mission-card">
+      <div class="mission-kicker">Current objective</div>
+      <div class="mission-title" id="missionTitle">Find your first Signal</div>
+      <div class="mission-meta" id="missionMeta">Bring a district online to start revealing pubs.</div>
     </div>
 
-    <div id="mapStatus" class="panel-sub panel-status">Move to a Signal to bring a district online.</div>
-  </div>
+    <div class="hud-actions">
+      <button onclick="centerOnUser()">Center on me</button>
+      <button class="button-secondary" onclick="resetProgress()">Reset progress</button>
+    </div>
 
-  <div class="panel-floating panel-floating-districts">
-    <div class="panel-title">District Progress</div>
-    <div class="panel-sub">Rewards and intel update as districts come online</div>
-    <div id="districtList"></div>
-  </div>
+    <div id="mapStatus" class="hud-footnote">Move to a Signal to bring a district online.</div>
+  </aside>
+
+  <aside class="hud-card hud-districts">
+    <div class="hud-drawer-head">
+      <div>
+        <div class="hud-kicker">Districts</div>
+        <div class="hud-title small">Survey Progress</div>
+      </div>
+      <button class="drawer-toggle" id="drawerToggleButton" type="button">Collapse</button>
+    </div>
+
+    <div id="districtSummary" class="district-summary-strip"></div>
+    <div id="districtList" class="district-drawer-list"></div>
+  </aside>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module">
@@ -75,7 +89,8 @@
       signals: "pint_signal_unlocked_signals",
       visited: "pint_signal_visited_pubs",
       xp: "pint_signal_xp",
-      rare: "pint_signal_rare_assignments"
+      rare: "pint_signal_rare_assignments",
+      drawer: "pint_signal_district_drawer_open"
     };
 
     const REWARD_STEPS = [
@@ -88,7 +103,8 @@
       unlockedSignals: new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.signals) || "[]")),
       visitedPubs: new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.visited) || "[]")),
       xp: Number(localStorage.getItem(STORAGE_KEYS.xp) || "0"),
-      rareAssignments: JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}")
+      rareAssignments: JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}"),
+      drawerOpen: localStorage.getItem(STORAGE_KEYS.drawer) !== "closed"
     };
 
     const map = L.map("map", {
@@ -111,18 +127,35 @@
     let pubMarkers = [];
 
     const signalsValueEl = document.getElementById("signalsValue");
-    const visiblePubsValueEl = document.getElementById("visiblePubsValue");
     const xpValueEl = document.getElementById("xpValue");
+    const signalsPercentTextEl = document.getElementById("signalsPercentText");
     const signalsProgressFillEl = document.getElementById("signalsProgressFill");
     const mapStatusEl = document.getElementById("mapStatus");
+    const districtSummaryEl = document.getElementById("districtSummary");
     const districtListEl = document.getElementById("districtList");
+    const missionTitleEl = document.getElementById("missionTitle");
+    const missionMetaEl = document.getElementById("missionMeta");
+    const drawerToggleButtonEl = document.getElementById("drawerToggleButton");
+    const districtsPanelEl = document.querySelector(".hud-districts");
 
     function saveState() {
       localStorage.setItem(STORAGE_KEYS.signals, JSON.stringify([...state.unlockedSignals]));
       localStorage.setItem(STORAGE_KEYS.visited, JSON.stringify([...state.visitedPubs]));
       localStorage.setItem(STORAGE_KEYS.xp, String(state.xp));
       localStorage.setItem(STORAGE_KEYS.rare, JSON.stringify(state.rareAssignments));
+      localStorage.setItem(STORAGE_KEYS.drawer, state.drawerOpen ? "open" : "closed");
     }
+
+    function setDrawerState(open) {
+      state.drawerOpen = open;
+      districtsPanelEl.classList.toggle("is-collapsed", !open);
+      drawerToggleButtonEl.textContent = open ? "Collapse" : "Expand";
+      saveState();
+    }
+
+    drawerToggleButtonEl.addEventListener("click", () => {
+      setDrawerState(!state.drawerOpen);
+    });
 
     function getStoredCoords(pubId) {
       const raw = localStorage.getItem(`pubcoords_${pubId}`);
@@ -369,6 +402,60 @@
       return { bestRare, nextTarget };
     }
 
+    function getCurrentMission() {
+      const lockedSignals = signals.filter(signal => !state.unlockedSignals.has(signal.id));
+
+      if (lockedSignals.length > 0) {
+        if (userPos) {
+          const closest = [...lockedSignals].sort((a, b) => {
+            return map.distance(userPos, [a.lat, a.lng]) - map.distance(userPos, [b.lat, b.lng]);
+          })[0];
+
+          const district = getDistrictById(closest.districtId);
+          const distance = Math.round(map.distance(userPos, [closest.lat, closest.lng]));
+
+          return {
+            title: `Unlock ${closest.name}`,
+            meta: `${district ? district.name : "District"} · ${distance}m away`
+          };
+        }
+
+        return {
+          title: "Unlock your next Signal",
+          meta: "Enable location to see the nearest district entry point."
+        };
+      }
+
+      const districtCandidates = districts
+        .map(district => ({
+          district,
+          completion: getDistrictCompletionPercent(district.id),
+          intel: getDistrictIntel(district.id)
+        }))
+        .filter(item => item.completion < 100);
+
+      if (districtCandidates.length > 0) {
+        const targetDistrict = [...districtCandidates].sort((a, b) => a.completion - b.completion)[0];
+
+        if (targetDistrict.intel.nextTarget) {
+          return {
+            title: `Discover ${targetDistrict.intel.nextTarget.name}`,
+            meta: `${targetDistrict.district.name} · Next best district target`
+          };
+        }
+
+        return {
+          title: `Push ${targetDistrict.district.name}`,
+          meta: `${targetDistrict.completion.toFixed(0)}% complete`
+        };
+      }
+
+      return {
+        title: "Westminster surveyed",
+        meta: "All current districts cleared."
+      };
+    }
+
     function discoverPub(pub) {
       if (state.visitedPubs.has(pub.id)) return;
 
@@ -419,14 +506,35 @@
       });
     }
 
-    function renderFloatingStats() {
-      const visiblePubs = getVisiblePubs();
+    function renderHud() {
       const progress = signals.length ? (state.unlockedSignals.size / signals.length) * 100 : 0;
+      const mission = getCurrentMission();
 
       signalsValueEl.textContent = `${state.unlockedSignals.size} / ${signals.length}`;
-      visiblePubsValueEl.textContent = String(visiblePubs.length);
       xpValueEl.textContent = String(state.xp);
+      signalsPercentTextEl.textContent = `${progress.toFixed(0)}%`;
       signalsProgressFillEl.style.width = `${progress}%`;
+      missionTitleEl.textContent = mission.title;
+      missionMetaEl.textContent = mission.meta;
+    }
+
+    function renderDistrictSummary() {
+      const online = districts.filter(district => {
+        return signals.some(signal => signal.districtId === district.id && state.unlockedSignals.has(signal.id));
+      }).length;
+
+      const totalVisited = state.visitedPubs.size;
+
+      districtSummaryEl.innerHTML = `
+        <div class="summary-chip">
+          <span>Districts online</span>
+          <strong>${online}/${districts.length}</strong>
+        </div>
+        <div class="summary-chip">
+          <span>Pubs discovered</span>
+          <strong>${totalVisited}</strong>
+        </div>
+      `;
     }
 
     function renderDistrictList() {
@@ -441,47 +549,52 @@
         const online = unlockedCount > 0;
 
         return `
-          <div class="district-row">
-            <div class="district-row-top">
+          <details class="district-item" ${online ? "open" : ""}>
+            <summary class="district-summary-row">
               <div class="district-name-wrap">
                 <span class="district-dot" style="background:${district.color};"></span>
                 <strong>${district.name}</strong>
               </div>
-              <span class="district-status ${online ? "district-online" : "district-offline"}">
-                ${online ? "Online" : "Locked"}
-              </span>
-            </div>
-
-            <div class="district-meta">
-              Signals ${unlockedCount}/${districtSignals.length} · Visited ${visitedPubs}/${totalPubs}
-            </div>
-
-            <div class="district-progress-bar">
-              <div
-                class="district-progress-fill"
-                style="width:${completion}%; background:${district.color};"
-              ></div>
-            </div>
-
-            <div class="reward-row">
-              ${rewards.map(reward => `
-                <span class="reward-pill ${reward.unlocked ? "reward-unlocked" : "reward-locked"}">
-                  ${reward.threshold}% ${reward.label}
+              <div class="district-summary-right">
+                <span class="district-mini-progress">${completion.toFixed(0)}%</span>
+                <span class="district-status ${online ? "district-online" : "district-offline"}">
+                  ${online ? "Online" : "Locked"}
                 </span>
-              `).join("")}
-            </div>
+              </div>
+            </summary>
 
-            <div class="intel-card">
-              <div class="intel-line">
-                <span>Best rare:</span>
-                <strong>${intel.bestRare ? `${intel.bestRare.name} (${getPubRarity(intel.bestRare)})` : "No intel yet"}</strong>
+            <div class="district-item-body">
+              <div class="district-meta">
+                Signals ${unlockedCount}/${districtSignals.length} · Visited ${visitedPubs}/${totalPubs}
               </div>
-              <div class="intel-line">
-                <span>Next target:</span>
-                <strong>${intel.nextTarget ? `${intel.nextTarget.name}` : "District cleared or still locked"}</strong>
+
+              <div class="district-progress-bar">
+                <div
+                  class="district-progress-fill"
+                  style="width:${completion}%; background:${district.color};"
+                ></div>
+              </div>
+
+              <div class="reward-row">
+                ${rewards.map(reward => `
+                  <span class="reward-pill ${reward.unlocked ? "reward-unlocked" : "reward-locked"}">
+                    ${reward.threshold}% ${reward.label}
+                  </span>
+                `).join("")}
+              </div>
+
+              <div class="intel-card">
+                <div class="intel-line">
+                  <span>Best rare</span>
+                  <strong>${intel.bestRare ? `${intel.bestRare.name} (${getPubRarity(intel.bestRare)})` : "No intel yet"}</strong>
+                </div>
+                <div class="intel-line">
+                  <span>Next target</span>
+                  <strong>${intel.nextTarget ? intel.nextTarget.name : (online ? "District cleared" : "Awaiting unlock")}</strong>
+                </div>
               </div>
             </div>
-          </div>
+          </details>
         `;
       }).join("");
     }
@@ -490,7 +603,8 @@
       renderDistrictLabels();
       renderSignals();
       renderPubs();
-      renderFloatingStats();
+      renderHud();
+      renderDistrictSummary();
       renderDistrictList();
     }
 
@@ -531,6 +645,8 @@
         } else {
           userMarker.setLatLng(userPos);
         }
+
+        renderHud();
       },
       () => {
         mapStatusEl.textContent = "Location unavailable. Signals require location access.";
@@ -566,6 +682,7 @@
     window.centerOnUser = centerOnUser;
     window.resetProgress = resetProgress;
 
+    setDrawerState(state.drawerOpen);
     renderAll();
   </script>
 </body>
