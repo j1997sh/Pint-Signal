@@ -1,164 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pint Signal Activity</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Activity</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div>
-        <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Recent activity</div>
-      </div>
 
-      <nav class="menu">
-        <a href="index.html">Home</a>
-        <a href="activity.html">Activity</a>
-      </nav>
-    </div>
-  </header>
+<header class="topbar">
+  <a href="index.html">← Home</a>
+</header>
 
-  <main class="page">
-    <section class="panel two-column">
-      <div>
-        <div class="panel-header">
-          <h2>Recent Prices</h2>
-          <p>Latest pint submissions across the app</p>
-        </div>
-        <div id="prices" class="stack-list"></div>
-      </div>
+<main class="page">
 
-      <div>
-        <div class="panel-header">
-          <h2>Recent Check-Ins</h2>
-          <p>Latest visits from users</p>
-        </div>
-        <div id="checkins" class="stack-list"></div>
-      </div>
-    </section>
-  </main>
+<h2>Recent Prices</h2>
+<div id="prices"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      query,
-      orderBy,
-      limit,
-      getDocs
-    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+</main>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
-      authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal",
-      storageBucket: "pintsignal.firebasestorage.app",
-      messagingSenderId: "63376472196",
-      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
-    };
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+const app=initializeApp({
+  apiKey:"AIzaSyB...",
+  authDomain:"pintsignal.firebaseapp.com",
+  projectId:"pintsignal"
+});
 
-    const pricesEl = document.getElementById("prices");
-    const checkinsEl = document.getElementById("checkins");
+const db=getFirestore(app);
 
-    function formatPrice(value) {
-      const numberValue = Number(value);
-      if (Number.isNaN(numberValue)) return "£0.00";
-      return `£${numberValue.toFixed(2)}`;
-    }
+async function load(){
+  const s=await getDocs(collection(db,"prices"));
+  s.forEach(doc=>{
+    const d=doc.data();
+    const div=document.createElement("div");
+    div.className="card";
+    div.innerHTML=`${d.pubName}<br>${d.drinkName} £${d.price}`;
+    document.getElementById("prices").appendChild(div);
+  });
+}
 
-    function formatTimeAgo(timestampMs) {
-      const diffMs = Date.now() - timestampMs;
-      const diffMinutes = Math.floor(diffMs / 60000);
+load();
+</script>
 
-      if (diffMinutes < 1) return "just now";
-      if (diffMinutes === 1) return "1 minute ago";
-      if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
-
-      const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours === 1) return "1 hour ago";
-      if (diffHours < 24) return `${diffHours} hours ago`;
-
-      const diffDays = Math.floor(diffHours / 24);
-      if (diffDays === 1) return "1 day ago";
-      return `${diffDays} days ago`;
-    }
-
-    async function loadPrices() {
-      pricesEl.innerHTML = "";
-
-      const q = query(
-        collection(db, "prices"),
-        orderBy("createdAtMs", "desc"),
-        limit(20)
-      );
-
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        pricesEl.innerHTML = `<div class="empty-state">No prices yet.</div>`;
-        return;
-      }
-
-      snapshot.forEach(doc => {
-        const data = doc.data();
-
-        const card = document.createElement("div");
-        card.className = "stack-card";
-
-        card.innerHTML = `
-          <div class="stack-title">${data.pubName || "Unknown pub"} • ${data.drinkName || "Drink"}</div>
-          <div class="stack-price">${formatPrice(data.price)}</div>
-          <div class="stack-meta">${data.note ? data.note + " • " : ""}${formatTimeAgo(data.createdAtMs || Date.now())}</div>
-        `;
-
-        pricesEl.appendChild(card);
-      });
-    }
-
-    async function loadCheckins() {
-      checkinsEl.innerHTML = "";
-
-      const q = query(
-        collection(db, "checkins"),
-        orderBy("createdAtMs", "desc"),
-        limit(20)
-      );
-
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        checkinsEl.innerHTML = `<div class="empty-state">No check-ins yet.</div>`;
-        return;
-      }
-
-      snapshot.forEach(doc => {
-        const data = doc.data();
-
-        const card = document.createElement("div");
-        card.className = "stack-card";
-
-        card.innerHTML = `
-          <div class="stack-title">${data.pubName || "Unknown pub"}</div>
-          <div class="stack-meta">User ${String(data.userId || "").slice(0, 8)} • ${formatTimeAgo(data.createdAtMs || Date.now())}</div>
-        `;
-
-        checkinsEl.appendChild(card);
-      });
-    }
-
-    async function start() {
-      await loadPrices();
-      await loadCheckins();
-    }
-
-    start();
-  </script>
 </body>
 </html>
