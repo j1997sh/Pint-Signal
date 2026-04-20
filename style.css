@@ -142,6 +142,7 @@ button:hover {
   border-radius: 20px;
   display: inline-block;
   margin-bottom: 6px;
+  font-weight: 700;
 }
 
 .hero-title {
@@ -166,10 +167,13 @@ button:hover {
 .mini-stat-label {
   font-size: 11px;
   color: #666;
+  text-transform: uppercase;
+  font-weight: 700;
 }
 
 .mini-stat-value {
   font-weight: 700;
+  font-size: 18px;
 }
 
 /* QUICK LINKS */
@@ -265,6 +269,19 @@ button:hover {
   grid-column: span 2;
 }
 
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field span {
+  font-size: 12px;
+  color: #666;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .form-field input {
   padding: 10px;
   border-radius: 10px;
@@ -282,11 +299,76 @@ button:hover {
 .empty-state {
   color: #777;
   font-size: 14px;
+  background: #fafafa;
+  padding: 14px;
+  border-radius: 12px;
 }
 
 /* MAP MARKER */
 .pint-marker-inner {
   font-size: 22px;
+}
+
+/* GENERIC INFO CARD */
+.info-card {
+  background: #fcfcff;
+  border: 1px solid #ececf3;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+/* BREAKDOWN / AWARENESS */
+.awareness-result {
+  margin-top: 14px;
+}
+
+.awareness-card {
+  background: #fff;
+  border: 1px solid #ececf3;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.breakdown-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f4;
+  font-size: 14px;
+}
+
+.breakdown-row.total {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.breakdown-row.government {
+  color: #7a3e00;
+}
+
+.comparison-line {
+  margin-top: 14px;
+  padding: 12px;
+  background: #fff7e6;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.radar-compare {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #5a4a00;
+  background: #fff8e8;
+  border-radius: 10px;
+  padding: 10px;
 }
 
 /* MOBILE */
@@ -301,5 +383,9 @@ button:hover {
 
   .passport-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stats-row {
+    flex-direction: column;
   }
 }
