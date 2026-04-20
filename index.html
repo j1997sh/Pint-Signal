@@ -37,7 +37,10 @@
 
       <div class="controls-row">
         <button onclick="centerOnUser()">Center On Me</button>
+        <button onclick="geocodeAllPubs()">Load All Pub Coordinates</button>
       </div>
+
+      <div id="mapStatus" class="stack-meta" style="margin-top:10px;">Ready.</div>
     </section>
 
     <section class="panel">
@@ -128,8 +131,9 @@
     const datasetCardEl = document.getElementById("datasetCard");
     const communityTotalsEl = document.getElementById("communityTotals");
     const cheapestEl = document.getElementById("cheapest");
+    const mapStatusEl = document.getElementById("mapStatus");
 
-    let map = L.map("map").setView([51.5007, -0.1290], 15);
+    let map = L.map("map").setView([51.5007, -0.1290], 14);
     let userLatLng = null;
     let userMarker = null;
     let pubMarkers = [];
@@ -197,21 +201,62 @@
       );
     }
 
+    function getStoredCoords(pubId) {
+      const raw = localStorage.getItem(`pubcoords_${pubId}`);
+      if (!raw) return null;
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          !Number.isNaN(parsed.lat) &&
+          !Number.isNaN(parsed.lng)
+        ) {
+          return parsed;
+        }
+      } catch (e) {}
+
+      return null;
+    }
+
+    function setStoredCoords(pubId, lat, lng) {
+      localStorage.setItem(`pubcoords_${pubId}`, JSON.stringify({ lat, lng }));
+    }
+
+    function getResolvedPubs() {
+      return westminsterPubs.map(pub => {
+        if (hasCoordinates(pub)) return pub;
+
+        const stored = getStoredCoords(pub.id);
+        if (stored) {
+          return {
+            ...pub,
+            lat: stored.lat,
+            lng: stored.lng
+          };
+        }
+
+        return pub;
+      });
+    }
+
     function clearPubMarkers() {
       pubMarkers.forEach(marker => map.removeLayer(marker));
       pubMarkers = [];
     }
 
-    function renderHardcodedPubsOnMap() {
+    function renderPubsOnMap() {
       clearPubMarkers();
 
-      const mappablePubs = westminsterPubs.filter(hasCoordinates);
+      const pubs = getResolvedPubs();
+      const mappablePubs = pubs.filter(hasCoordinates);
 
       mappablePubs.forEach(pub => {
         const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
 
         marker.bindPopup(`
-          <div style="min-width: 180px;">
+          <div style="min-width:180px;">
             <strong>${pub.name}</strong><br>
             ${pub.address || ""}<br>
             ${pub.postcode || ""}
@@ -219,17 +264,19 @@
         `);
 
         marker.on("click", () => {
-          const urlId = encodeURIComponent(pub.id);
-          window.location.href = `pub.html?id=${urlId}`;
+          window.location.href = `pub.html?id=${encodeURIComponent(pub.id)}`;
         });
 
         pubMarkers.push(marker);
       });
+
+      renderDatasetCard();
     }
 
     function renderDatasetCard() {
-      const total = westminsterPubs.length;
-      const mapped = westminsterPubs.filter(hasCoordinates).length;
+      const pubs = getResolvedPubs();
+      const total = pubs.length;
+      const mapped = pubs.filter(hasCoordinates).length;
       const missing = total - mapped;
 
       datasetCardEl.innerHTML = `
@@ -257,9 +304,75 @@
         </div>
 
         <div class="comparison-line compact">
-          Only pubs with real <strong>lat</strong> and <strong>lng</strong> are shown on the map.
+          Click <strong>Load All Pub Coordinates</strong> once. The browser will cache them for you.
         </div>
       `;
+    }
+
+    async function geocodePub(pub) {
+      const query = encodeURIComponent(`${pub.address}, ${pub.postcode || ""}, London`);
+      const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=jsonv2&limit=1`;
+
+      const response = await fetch(url, {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Geocoder returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data) || data.length === 0) {
+        return null;
+      }
+
+      return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon)
+      };
+    }
+
+    async function geocodeAllPubs() {
+      const pubs = getResolvedPubs();
+      const missingPubs = pubs.filter(pub => !hasCoordinates(pub));
+
+      if (missingPubs.length === 0) {
+        mapStatusEl.textContent = "All pubs already have coordinates.";
+        renderPubsOnMap();
+        return;
+      }
+
+      mapStatusEl.textContent = `Loading coordinates for ${missingPubs.length} pubs. Keep this tab open.`;
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < missingPubs.length; i++) {
+        const pub = missingPubs[i];
+        mapStatusEl.textContent = `Geocoding ${i + 1} / ${missingPubs.length}: ${pub.name}`;
+
+        try {
+          const coords = await geocodePub(pub);
+
+          if (coords && !Number.isNaN(coords.lat) && !Number.isNaN(coords.lng)) {
+            setStoredCoords(pub.id, coords.lat, coords.lng);
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          console.error("Geocode failed for", pub.name, error);
+          failCount++;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1100));
+      }
+
+      renderPubsOnMap();
+      mapStatusEl.textContent = `Done. Added ${successCount} pub coordinates. Failed: ${failCount}.`;
     }
 
     async function loadCommunityData() {
@@ -374,10 +487,11 @@
     }
 
     window.centerOnUser = centerOnUser;
+    window.geocodeAllPubs = geocodeAllPubs;
 
     async function start() {
       renderDatasetCard();
-      renderHardcodedPubsOnMap();
+      renderPubsOnMap();
       await loadCommunityData();
     }
 
