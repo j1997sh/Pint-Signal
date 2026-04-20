@@ -4,173 +4,353 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pint Signal</title>
-
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
-
 <body>
-<header class="topbar">
-  <div class="topbar-inner">
-    <div>
-      <div class="brand-title">Pint Signal 🍺</div>
-      <div class="brand-subtitle">Signal Network</div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal 🍺</div>
+        <div class="brand-subtitle">Signal Network</div>
+      </div>
+
+      <nav class="menu">
+        <a href="index.html">Map</a>
+        <a href="passport.html">Passport</a>
+        <a href="leaderboard.html">Leaderboard</a>
+      </nav>
     </div>
+  </header>
 
-    <nav class="menu">
-      <a href="index.html">Map</a>
-      <a href="passport.html">Passport</a>
-      <a href="leaderboard.html">Leaderboard</a>
-    </nav>
-  </div>
-</header>
+  <main class="page">
+    <section class="panel map-panel">
+      <div class="panel-header">
+        <h2>Signal Network</h2>
+        <p>Activate Signals to reveal pubs across Westminster</p>
+      </div>
 
-<main class="page">
-  <section class="panel map-panel">
-    <div class="panel-header">
-      <h2>Signal Network</h2>
-      <p>Activate signals to reveal pubs</p>
-    </div>
+      <div class="map-shell">
+        <div id="map"></div>
+        <div class="map-overlay-vignette"></div>
+        <div class="map-overlay-noise"></div>
+      </div>
 
-    <div class="map-shell">
-      <div id="map"></div>
-      <div class="map-overlay-vignette"></div>
-    </div>
+      <div class="controls-row">
+        <button onclick="centerOnUser()">Center On Me</button>
+      </div>
 
-    <div class="controls-row">
-      <button onclick="centerOnUser()">Center</button>
-    </div>
+      <div id="mapStatus" class="stack-meta top-gap">
+        Move to a Signal to bring part of the city online.
+      </div>
+    </section>
 
-    <div id="mapStatus" class="stack-meta top-gap">
-      Move to a signal to unlock it
-    </div>
-  </section>
-</main>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Network Status</h2>
+        <p>Your current exploration state</p>
+      </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <div id="networkCard" class="totaliser-card">Loading...</div>
+    </section>
+  </main>
 
-<script type="module">
-import { westminsterPubs } from "./westminster-pubs.js";
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-const signals = [
-  { id:"parliament", lat:51.4995, lng:-0.1248 },
-  { id:"trafalgar", lat:51.5080, lng:-0.1281 },
-  { id:"bridge", lat:51.5009, lng:-0.1217 },
-  { id:"green", lat:51.5065, lng:-0.1426 },
-  { id:"buckingham", lat:51.5014, lng:-0.1419 },
-  { id:"leicester", lat:51.5113, lng:-0.1281 },
-  { id:"soho", lat:51.5136, lng:-0.1365 },
-  { id:"waterloo", lat:51.5033, lng:-0.1147 },
-  { id:"vauxhall", lat:51.4866, lng:-0.1225 },
-  { id:"victoria", lat:51.4952, lng:-0.1442 }
-];
+  <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
 
-const SIGNAL_RADIUS = 450;
-const UNLOCK_DISTANCE = 50;
+    const signals = [
+      { id: "parliament", name: "Parliament Signal", lat: 51.4995, lng: -0.1248 },
+      { id: "trafalgar", name: "Trafalgar Signal", lat: 51.5080, lng: -0.1281 },
+      { id: "bridge", name: "Bridge Signal", lat: 51.5009, lng: -0.1217 },
+      { id: "green", name: "Green Park Signal", lat: 51.5065, lng: -0.1426 },
+      { id: "buckingham", name: "Palace Signal", lat: 51.5014, lng: -0.1419 },
+      { id: "leicester", name: "Leicester Signal", lat: 51.5113, lng: -0.1281 },
+      { id: "soho", name: "Soho Signal", lat: 51.5136, lng: -0.1365 },
+      { id: "waterloo", name: "Waterloo Signal", lat: 51.5033, lng: -0.1147 },
+      { id: "vauxhall", name: "Vauxhall Signal", lat: 51.4866, lng: -0.1225 },
+      { id: "victoria", name: "Victoria Signal", lat: 51.4952, lng: -0.1442 }
+    ];
 
-let unlockedSignals = new Set(JSON.parse(localStorage.getItem("signals") || "[]"));
+    const SIGNAL_RADIUS = 450;
+    const UNLOCK_DISTANCE = 50;
 
-let map = L.map("map").setView([51.5007, -0.129], 14);
+    let unlockedSignals = new Set(JSON.parse(localStorage.getItem("signals") || "[]"));
 
-let userPos = null;
-let userMarker = null;
+    let map = L.map("map", {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([51.5007, -0.1290], 14);
 
-let signalMarkers = [];
-let pubMarkers = [];
+    let userPos = null;
+    let userMarker = null;
 
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png").addTo(map);
+    let signalMarkers = [];
+    let signalRevealCircles = [];
+    let signalGlowCircles = [];
+    let pubMarkers = [];
 
-navigator.geolocation.watchPosition(pos => {
-  userPos = [pos.coords.latitude, pos.coords.longitude];
+    const networkCardEl = document.getElementById("networkCard");
+    const mapStatusEl = document.getElementById("mapStatus");
 
-  if (!userMarker) {
-    userMarker = L.marker(userPos).addTo(map);
-  } else {
-    userMarker.setLatLng(userPos);
-  }
-});
-
-function renderSignals() {
-  signalMarkers.forEach(m => map.removeLayer(m));
-  signalMarkers = [];
-
-  signals.forEach(s => {
-    const unlocked = unlockedSignals.has(s.id);
-
-    const marker = L.marker([s.lat, s.lng], {
-      icon: L.divIcon({
-        html:`<div class="signal ${unlocked ? "on":""}">📡</div>`
-      })
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: "&copy; OpenStreetMap & CARTO",
+      maxZoom: 19
     }).addTo(map);
 
-    marker.on("click", () => unlockSignal(s));
+    function getStoredCoords(pubId) {
+      const raw = localStorage.getItem(`pubcoords_${pubId}`);
+      if (!raw) return null;
 
-    signalMarkers.push(marker);
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          !Number.isNaN(parsed.lat) &&
+          !Number.isNaN(parsed.lng)
+        ) {
+          return parsed;
+        }
+      } catch (error) {}
 
-    if (unlocked) {
-      L.circle([s.lat, s.lng], {
-        radius: SIGNAL_RADIUS,
-        color:"#ffd27a",
-        fillOpacity:0.15
-      }).addTo(map);
+      return null;
     }
-  });
-}
 
-function unlockSignal(signal) {
-  if (!userPos) return;
+    function hasCoordinates(pub) {
+      return (
+        typeof pub.lat === "number" &&
+        typeof pub.lng === "number" &&
+        !Number.isNaN(pub.lat) &&
+        !Number.isNaN(pub.lng)
+      );
+    }
 
-  const dist = map.distance(userPos, [signal.lat, signal.lng]);
+    function getResolvedPubs() {
+      return westminsterPubs.map(pub => {
+        if (hasCoordinates(pub)) return pub;
 
-  if (dist > UNLOCK_DISTANCE) return;
+        const stored = getStoredCoords(pub.id);
+        if (stored) {
+          return {
+            ...pub,
+            lat: stored.lat,
+            lng: stored.lng
+          };
+        }
 
-  if (!unlockedSignals.has(signal.id)) {
-    unlockedSignals.add(signal.id);
-    localStorage.setItem("signals", JSON.stringify([...unlockedSignals]));
+        return pub;
+      });
+    }
+
+    function signalIcon(unlocked) {
+      return L.divIcon({
+        html: `
+          <div class="signal-marker ${unlocked ? "signal-unlocked" : "signal-locked"}">
+            <div class="signal-core">📡</div>
+            <div class="signal-ring signal-ring-1"></div>
+            <div class="signal-ring signal-ring-2"></div>
+          </div>
+        `,
+        className: "signal-marker-wrap",
+        iconSize: [54, 54],
+        iconAnchor: [27, 27]
+      });
+    }
+
+    function pubIcon() {
+      return L.divIcon({
+        html: `<div class="pint-marker-ac">🍺</div>`,
+        className: "pint-marker-wrap",
+        iconSize: [34, 34],
+        iconAnchor: [17, 24]
+      });
+    }
+
+    function clearMarkers(list) {
+      list.forEach(layer => map.removeLayer(layer));
+      list.length = 0;
+    }
+
+    function renderSignals() {
+      clearMarkers(signalMarkers);
+      clearMarkers(signalRevealCircles);
+      clearMarkers(signalGlowCircles);
+
+      signals.forEach(signal => {
+        const unlocked = unlockedSignals.has(signal.id);
+
+        if (unlocked) {
+          const glow = L.circle([signal.lat, signal.lng], {
+            radius: SIGNAL_RADIUS * 1.25,
+            stroke: false,
+            fillColor: "#ffd27a",
+            fillOpacity: 0.05,
+            interactive: false
+          }).addTo(map);
+
+          const reveal = L.circle([signal.lat, signal.lng], {
+            radius: SIGNAL_RADIUS,
+            color: "#ffcc73",
+            weight: 1,
+            fillColor: "#ffcc73",
+            fillOpacity: 0.12,
+            interactive: false
+          }).addTo(map);
+
+          signalGlowCircles.push(glow);
+          signalRevealCircles.push(reveal);
+        }
+
+        const marker = L.marker([signal.lat, signal.lng], {
+          icon: signalIcon(unlocked)
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width: 190px;">
+            <strong>${signal.name}</strong><br>
+            ${unlocked ? "Unlocked ✓" : "Locked"}<br>
+            ${unlocked ? "Area online." : "Move within 50m to unlock."}
+          </div>
+        `);
+
+        marker.on("click", () => unlockSignal(signal));
+        signalMarkers.push(marker);
+      });
+    }
+
+    function isPubVisible(pub) {
+      return signals.some(signal => {
+        if (!unlockedSignals.has(signal.id)) return false;
+        const distance = map.distance([pub.lat, pub.lng], [signal.lat, signal.lng]);
+        return distance <= SIGNAL_RADIUS;
+      });
+    }
+
+    function renderPubs() {
+      clearMarkers(pubMarkers);
+
+      const pubs = getResolvedPubs();
+      const visiblePubs = pubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
+
+      visiblePubs.forEach(pub => {
+        const marker = L.marker([pub.lat, pub.lng], {
+          icon: pubIcon()
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width: 190px;">
+            <strong>${pub.name}</strong><br>
+            ${pub.address || ""}<br>
+            ${pub.postcode || ""}<br>
+            Click to open pub page.
+          </div>
+        `);
+
+        marker.on("click", () => {
+          window.location.href = `pub.html?id=${encodeURIComponent(pub.id)}`;
+        });
+
+        pubMarkers.push(marker);
+      });
+    }
+
+    function renderNetworkCard() {
+      const resolvedPubs = getResolvedPubs();
+      const visiblePubs = resolvedPubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
+      const mappedPubs = resolvedPubs.filter(pub => hasCoordinates(pub)).length;
+
+      networkCardEl.innerHTML = `
+        <div class="hero-badge">Signal Layer</div>
+        <div class="hero-title">${unlockedSignals.size} / ${signals.length} Signals unlocked</div>
+        <div class="stack-meta">Unlocked Signals reveal nearby pubs and light up the city</div>
+
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Signals active</div>
+            <div class="mini-stat-value">${unlockedSignals.size}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Visible pubs</div>
+            <div class="mini-stat-value">${visiblePubs.length}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Mapped pubs</div>
+            <div class="mini-stat-value">${mappedPubs}</div>
+          </div>
+        </div>
+
+        <div class="comparison-line compact">
+          ${unlockedSignals.size === 0
+            ? "Start by walking to a Signal. Pubs remain hidden until a nearby Signal is activated."
+            : "Signals unlocked. Newly revealed zones now expose the pubs inside them."}
+        </div>
+      `;
+    }
+
+    function renderAll() {
+      renderSignals();
+      renderPubs();
+      renderNetworkCard();
+    }
+
+    function status(message) {
+      mapStatusEl.textContent = message;
+    }
+
+    function unlockSignal(signal) {
+      if (!userPos) {
+        status("Enable location to activate Signals.");
+        return;
+      }
+
+      const dist = map.distance(userPos, [signal.lat, signal.lng]);
+
+      if (dist > UNLOCK_DISTANCE) {
+        status(`${signal.name} is ${Math.round(dist)}m away.`);
+        return;
+      }
+
+      if (!unlockedSignals.has(signal.id)) {
+        unlockedSignals.add(signal.id);
+        localStorage.setItem("signals", JSON.stringify([...unlockedSignals]));
+        status(`${signal.name} unlocked. Area brought online.`);
+        renderAll();
+      } else {
+        status(`${signal.name} is already online.`);
+      }
+    }
+
+    navigator.geolocation.watchPosition(
+      pos => {
+        userPos = [pos.coords.latitude, pos.coords.longitude];
+
+        if (!userMarker) {
+          userMarker = L.marker(userPos).addTo(map).bindPopup("You are here");
+        } else {
+          userMarker.setLatLng(userPos);
+        }
+      },
+      () => {
+        status("Location unavailable. Signals require location access.");
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 10000
+      }
+    );
+
+    function centerOnUser() {
+      if (userPos) {
+        map.setView(userPos, 16);
+      }
+    }
+
+    window.centerOnUser = centerOnUser;
+
     renderAll();
-  }
-}
-
-function isVisible(pub) {
-  return signals.some(s => {
-    if (!unlockedSignals.has(s.id)) return false;
-    return map.distance([pub.lat,pub.lng],[s.lat,s.lng]) < SIGNAL_RADIUS;
-  });
-}
-
-function renderPubs() {
-  pubMarkers.forEach(m => map.removeLayer(m));
-  pubMarkers = [];
-
-  westminsterPubs.forEach(pub => {
-    if (!pub.lat || !isVisible(pub)) return;
-
-    const marker = L.marker([pub.lat, pub.lng], {
-      icon: L.divIcon({
-        html:`<div class="pint">🍺</div>`
-      })
-    }).addTo(map);
-
-    marker.on("click", () => {
-      window.location.href = "pub.html?id=" + pub.id;
-    });
-
-    pubMarkers.push(marker);
-  });
-}
-
-function centerOnUser(){
-  if(userPos) map.setView(userPos,16);
-}
-
-window.centerOnUser = centerOnUser;
-
-function renderAll(){
-  renderSignals();
-  renderPubs();
-}
-
-renderAll();
-</script>
+  </script>
 </body>
 </html>
