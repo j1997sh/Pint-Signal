@@ -1,377 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pint Signal</title>
-  <link rel="stylesheet" href="style.css" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div>
-        <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Westminster pub map, prices, and check-ins</div>
-      </div>
-
-      <nav class="menu">
-        <a href="index.html">Home</a>
-        <a href="activity.html">Activity</a>
-      </nav>
-    </div>
-  </header>
-
-  <main class="page">
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Map</h2>
-        <p>Find pubs nearby and jump into pub details</p>
-      </div>
-
-      <div id="map"></div>
-
-      <div class="controls-row">
-        <button onclick="centerOnUser()">Center On Me</button>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Cheapest Nearby Pint</h2>
-        <p>Latest submitted price from pubs near you</p>
-      </div>
-      <div id="cheapest" class="info-card empty-state">Allow location to see cheapest nearby.</div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Pubs</h2>
-        <p>Tap a pub to open its place card</p>
-      </div>
-      <div id="pubList" class="stack-list"></div>
-    </section>
-  </main>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      getDocs,
-      query,
-      where,
-      orderBy,
-      limit
-    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
-      authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal",
-      storageBucket: "pintsignal.firebasestorage.app",
-      messagingSenderId: "63376472196",
-      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    const pubListEl = document.getElementById("pubList");
-    const cheapestEl = document.getElementById("cheapest");
-
-    let map;
-    let userLatLng = null;
-    let userMarker = null;
-    let accuracyCircle = null;
-    let pubMarkers = [];
-    let pubs = [];
-
-    function toRadians(value) {
-      return (value * Math.PI) / 180;
-    }
-
-    function distanceInMeters(lat1, lng1, lat2, lng2) {
-      const earthRadius = 6371000;
-      const dLat = toRadians(lat2 - lat1);
-      const dLng = toRadians(lng2 - lng1);
-
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRadians(lat1)) *
-          Math.cos(toRadians(lat2)) *
-          Math.sin(dLng / 2) *
-          Math.sin(dLng / 2);
-
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return Math.round(earthRadius * c);
-    }
-
-    function formatDistance(meters) {
-      if (meters < 1000) return `${meters}m away`;
-      return `${(meters / 1000).toFixed(2)}km away`;
-    }
-
-    function formatPrice(value) {
-      const numberValue = Number(value);
-      if (Number.isNaN(numberValue)) return "£0.00";
-      return `£${numberValue.toFixed(2)}`;
-    }
-
-    function formatTimeAgo(timestampMs) {
-      const diffMs = Date.now() - timestampMs;
-      const diffMinutes = Math.floor(diffMs / 60000);
-
-      if (diffMinutes < 1) return "just now";
-      if (diffMinutes === 1) return "1 minute ago";
-      if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
-
-      const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours === 1) return "1 hour ago";
-      if (diffHours < 24) return `${diffHours} hours ago`;
-
-      const diffDays = Math.floor(diffHours / 24);
-      if (diffDays === 1) return "1 day ago";
-      return `${diffDays} days ago`;
-    }
-
-    function createPintIcon() {
-      return L.divIcon({
-        html: '<div class="pint-marker-inner">🍺</div>',
-        className: "pint-marker",
-        iconSize: [34, 34],
-        iconAnchor: [17, 28],
-        popupAnchor: [0, -24]
-      });
-    }
-
-    function initMap() {
-      map = L.map("map").setView([51.5007, -0.1290], 15);
-
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap & CARTO",
-        maxZoom: 19
-      }).addTo(map);
-    }
-
-    function clearPubMarkers() {
-      pubMarkers.forEach(marker => map.removeLayer(marker));
-      pubMarkers = [];
-    }
-
-    function renderPubMarkers() {
-      clearPubMarkers();
-
-      pubs.forEach(pub => {
-        const marker = L.marker([pub.lat, pub.lng], {
-          icon: createPintIcon()
-        }).addTo(map);
-
-        const distanceText = userLatLng
-          ? `<br><strong>${formatDistance(distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng))}</strong>`
-          : "";
-
-        marker.bindPopup(`
-          <div style="min-width:180px;">
-            <strong>${pub.name}</strong><br>
-            ${pub.area || "Westminster"}<br>
-            ${(pub.tags || []).join(", ")}
-            ${distanceText}
-          </div>
-        `);
-
-        marker.on("click", () => {
-          window.location.href = `pub.html?id=${pub.id}`;
-        });
-
-        pubMarkers.push(marker);
-      });
-    }
-
-    function renderPubList() {
-      pubListEl.innerHTML = "";
-
-      if (pubs.length === 0) {
-        pubListEl.innerHTML = `<div class="empty-state">No pubs found.</div>`;
-        return;
-      }
-
-      const sortedPubs = [...pubs].sort((a, b) => {
-        if (!userLatLng) return a.name.localeCompare(b.name);
-        return (
-          distanceInMeters(userLatLng.lat, userLatLng.lng, a.lat, a.lng) -
-          distanceInMeters(userLatLng.lat, userLatLng.lng, b.lat, b.lng)
-        );
-      });
-
-      sortedPubs.forEach(pub => {
-        const card = document.createElement("button");
-        card.className = "stack-card pub-list-card";
-        card.type = "button";
-
-        const distanceHtml = userLatLng
-          ? `<div class="stack-meta strong">${formatDistance(distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng))}</div>`
-          : "";
-
-        card.innerHTML = `
-          <div class="stack-title">${pub.name}</div>
-          <div class="stack-meta">${pub.area || "Westminster"} • ${(pub.tags || []).join(", ")}</div>
-          ${distanceHtml}
-        `;
-
-        card.addEventListener("click", () => {
-          window.location.href = `pub.html?id=${pub.id}`;
-        });
-
-        pubListEl.appendChild(card);
-      });
-    }
-
-    async function getLatestPrice(pubId) {
-      const q = query(
-        collection(db, "prices"),
-        where("pubId", "==", pubId),
-        orderBy("createdAtMs", "desc"),
-        limit(1)
-      );
-
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) return null;
-      return snapshot.docs[0].data();
-    }
-
-    async function buildCheapest() {
-      if (!userLatLng) {
-        cheapestEl.className = "info-card empty-state";
-        cheapestEl.innerHTML = "Allow location to see cheapest nearby.";
-        return;
-      }
-
-      const candidates = [];
-
-      for (const pub of pubs) {
-        const latestPrice = await getLatestPrice(pub.id);
-        if (!latestPrice) continue;
-
-        const distance = distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng);
-
-        if (distance <= 1200) {
-          candidates.push({
-            pub,
-            latestPrice,
-            distance
-          });
-        }
-      }
-
-      if (candidates.length === 0) {
-        cheapestEl.className = "info-card empty-state";
-        cheapestEl.innerHTML = "No nearby price submissions yet.";
-        return;
-      }
-
-      candidates.sort((a, b) => Number(a.latestPrice.price) - Number(b.latestPrice.price));
-
-      const best = candidates[0];
-
-      cheapestEl.className = "info-card";
-      cheapestEl.innerHTML = `
-        <div class="hero-badge">Cheapest Nearby</div>
-        <div class="hero-title">${best.pub.name}</div>
-        <div class="hero-price">${best.latestPrice.drinkName} • ${formatPrice(best.latestPrice.price)}</div>
-        <div class="stack-meta">${formatDistance(best.distance)} • ${(best.pub.tags || []).join(", ")}</div>
-        <div class="stack-meta">${best.latestPrice.note ? best.latestPrice.note + " • " : ""}${formatTimeAgo(best.latestPrice.createdAtMs)}</div>
-        <div class="controls-row">
-          <button onclick="openPub('${best.pub.id}')">Open Pub</button>
-        </div>
-      `;
-    }
-
-    async function loadPubs() {
-      const snapshot = await getDocs(collection(db, "pubs"));
-      pubs = [];
-
-      snapshot.forEach(doc => {
-        const pub = doc.data();
-        pubs.push({
-          id: doc.id,
-          name: pub.name,
-          area: pub.area || "Westminster",
-          lat: Number(pub.lat),
-          lng: Number(pub.lng),
-          tags: Array.isArray(pub.tags) ? pub.tags : []
-        });
-      });
-
-      renderPubMarkers();
-      renderPubList();
-      await buildCheapest();
-    }
-
-    function updateUserLocation(position) {
-      const { latitude, longitude, accuracy } = position.coords;
-      userLatLng = { lat: latitude, lng: longitude };
-
-      if (!userMarker) {
-        userMarker = L.marker([latitude, longitude]).addTo(map).bindPopup("You are here");
-      } else {
-        userMarker.setLatLng([latitude, longitude]);
-      }
-
-      if (!accuracyCircle) {
-        accuracyCircle = L.circle([latitude, longitude], {
-          radius: accuracy,
-          color: "#5b8def",
-          fillColor: "#5b8def",
-          fillOpacity: 0.1,
-          weight: 2
-        }).addTo(map);
-      } else {
-        accuracyCircle.setLatLng([latitude, longitude]);
-        accuracyCircle.setRadius(accuracy);
-      }
-
-      renderPubMarkers();
-      renderPubList();
-      buildCheapest();
-    }
-
-    function centerOnUser() {
-      if (!userLatLng) return;
-      map.setView([userLatLng.lat, userLatLng.lng], 16);
-    }
-
-    function startLocation() {
-      if (!("geolocation" in navigator)) return;
-
-      navigator.geolocation.watchPosition(
-        position => {
-          updateUserLocation(position);
-        },
-        () => {},
-        {
-          enableHighAccuracy: true,
-          maximumAge: 10000,
-          timeout: 10000
-        }
-      );
-    }
-
-    function openPub(pubId) {
-      window.location.href = `pub.html?id=${pubId}`;
-    }
-
-    window.centerOnUser = centerOnUser;
-    window.openPub = openPub;
-
-    initMap();
-    startLocation();
-    loadPubs();
-  </script>
+
+<header class="topbar">
+  <div class="brand-title">Pint Signal 🍺</div>
+  <nav class="menu">
+    <a href="index.html">Home</a>
+    <a href="passport.html">Passport</a>
+    <a href="activity.html">Activity</a>
+  </nav>
+</header>
+
+<main class="page">
+
+<h2>Your Progress</h2>
+<div id="xpCard" class="card"></div>
+
+<h2>Cheap Pint Radar</h2>
+<div id="cheapest"></div>
+
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+const app = initializeApp({
+  apiKey:"AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+  authDomain:"pintsignal.firebaseapp.com",
+  projectId:"pintsignal"
+});
+
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+let user;
+
+function xpFromData(checkins, prices){
+  return (checkins * 10) + (prices * 15);
+}
+
+function getBadge(xp){
+  if(xp > 200) return "🏆 Pint Legend";
+  if(xp > 100) return "🍺 Regular";
+  if(xp > 50) return "👣 Explorer";
+  return "🆕 New Drinker";
+}
+
+async function load(){
+  const u = await signInAnonymously(auth);
+  user = u.user;
+
+  const checkSnap = await getDocs(collection(db,"checkins"));
+  const priceSnap = await getDocs(collection(db,"prices"));
+
+  let myCheckins = 0;
+  let myPrices = 0;
+
+  checkSnap.forEach(d=>{
+    if(d.data().userId === user.uid) myCheckins++;
+  });
+
+  priceSnap.forEach(d=>{
+    if(d.data().userId === user.uid) myPrices++;
+  });
+
+  const xp = xpFromData(myCheckins, myPrices);
+
+  document.getElementById("xpCard").innerHTML = `
+    <b>${getBadge(xp)}</b><br>
+    XP: ${xp}<br>
+    Check-ins: ${myCheckins}<br>
+    Prices submitted: ${myPrices}
+  `;
+
+  buildRadar(priceSnap);
+}
+
+function buildRadar(priceSnap){
+  let prices = [];
+
+  priceSnap.forEach(d=>{
+    prices.push(d.data());
+  });
+
+  prices.sort((a,b)=>a.price - b.price);
+
+  const top = prices.slice(0,3);
+
+  const el = document.getElementById("cheapest");
+  el.innerHTML = "";
+
+  top.forEach(p=>{
+    const div = document.createElement("div");
+    div.className="card";
+    div.innerHTML = `
+      <b>${p.pubName}</b><br>
+      ${p.drinkName} £${p.price}
+    `;
+    el.appendChild(div);
+  });
+}
+
+load();
+</script>
+
 </body>
 </html>
