@@ -18,7 +18,7 @@
     </div>
 
     <nav class="menu">
-      <a href="index.html">Home</a>
+      <a href="index.html">Map</a>
       <a href="passport.html">Passport</a>
       <a href="leaderboard.html">Leaderboard</a>
     </nav>
@@ -26,7 +26,6 @@
 </header>
 
 <main class="page">
-
   <section class="panel map-panel">
     <div class="panel-header">
       <h2>Signal Network</h2>
@@ -42,9 +41,10 @@
       <button onclick="centerOnUser()">Center</button>
     </div>
 
-    <div id="mapStatus" class="stack-meta top-gap">Move to a signal to unlock it</div>
+    <div id="mapStatus" class="stack-meta top-gap">
+      Move to a signal to unlock it
+    </div>
   </section>
-
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -52,12 +52,8 @@
 <script type="module">
 import { westminsterPubs } from "./westminster-pubs.js";
 
-/* =========================
-   SIGNAL DATA
-========================= */
-
 const signals = [
-  { id:"parliament", name:"Parliament", lat:51.4995, lng:-0.1248 },
+  { id:"parliament", lat:51.4995, lng:-0.1248 },
   { id:"trafalgar", lat:51.5080, lng:-0.1281 },
   { id:"bridge", lat:51.5009, lng:-0.1217 },
   { id:"green", lat:51.5065, lng:-0.1426 },
@@ -69,20 +65,10 @@ const signals = [
   { id:"victoria", lat:51.4952, lng:-0.1442 }
 ];
 
-/* =========================
-   CONFIG
-========================= */
-
 const SIGNAL_RADIUS = 450;
 const UNLOCK_DISTANCE = 50;
 
-/* =========================
-   STATE
-========================= */
-
-let unlockedSignals = new Set(
-  JSON.parse(localStorage.getItem("signals") || "[]")
-);
+let unlockedSignals = new Set(JSON.parse(localStorage.getItem("signals") || "[]"));
 
 let map = L.map("map").setView([51.5007, -0.129], 14);
 
@@ -92,17 +78,7 @@ let userMarker = null;
 let signalMarkers = [];
 let pubMarkers = [];
 
-/* =========================
-   MAP BASE
-========================= */
-
-L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-).addTo(map);
-
-/* =========================
-   USER LOCATION
-========================= */
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png").addTo(map);
 
 navigator.geolocation.watchPosition(pos => {
   userPos = [pos.coords.latitude, pos.coords.longitude];
@@ -113,10 +89,6 @@ navigator.geolocation.watchPosition(pos => {
     userMarker.setLatLng(userPos);
   }
 });
-
-/* =========================
-   SIGNALS
-========================= */
 
 function renderSignals() {
   signalMarkers.forEach(m => map.removeLayer(m));
@@ -145,55 +117,32 @@ function renderSignals() {
   });
 }
 
-/* =========================
-   UNLOCK
-========================= */
-
 function unlockSignal(signal) {
-  if (!userPos) {
-    status("Enable location");
-    return;
-  }
+  if (!userPos) return;
 
   const dist = map.distance(userPos, [signal.lat, signal.lng]);
 
-  if (dist > UNLOCK_DISTANCE) {
-    status("Move closer (" + Math.round(dist) + "m)");
-    return;
-  }
+  if (dist > UNLOCK_DISTANCE) return;
 
   if (!unlockedSignals.has(signal.id)) {
     unlockedSignals.add(signal.id);
     localStorage.setItem("signals", JSON.stringify([...unlockedSignals]));
-
-    status("Signal unlocked ✔");
-
     renderAll();
   }
 }
 
-/* =========================
-   PUB VISIBILITY
-========================= */
-
 function isVisible(pub) {
   return signals.some(s => {
     if (!unlockedSignals.has(s.id)) return false;
-
     return map.distance([pub.lat,pub.lng],[s.lat,s.lng]) < SIGNAL_RADIUS;
   });
 }
-
-/* =========================
-   PUBS
-========================= */
 
 function renderPubs() {
   pubMarkers.forEach(m => map.removeLayer(m));
   pubMarkers = [];
 
   westminsterPubs.forEach(pub => {
-
     if (!pub.lat || !isVisible(pub)) return;
 
     const marker = L.marker([pub.lat, pub.lng], {
@@ -210,36 +159,18 @@ function renderPubs() {
   });
 }
 
-/* =========================
-   UI
-========================= */
-
-function status(msg){
-  document.getElementById("mapStatus").innerText = msg;
-}
-
 function centerOnUser(){
   if(userPos) map.setView(userPos,16);
 }
 
 window.centerOnUser = centerOnUser;
 
-/* =========================
-   RENDER
-========================= */
-
 function renderAll(){
   renderSignals();
   renderPubs();
 }
 
-/* =========================
-   START
-========================= */
-
 renderAll();
-
 </script>
-
 </body>
 </html>
