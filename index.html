@@ -35,9 +35,21 @@
       <div id="map"></div>
     </section>
 
+    <section class="selected-wrap">
+      <h2>Selected Pub</h2>
+      <div id="selectedPubPanel" class="selected-panel empty">
+        Tap a pub marker or pub card to select a pub.
+      </div>
+    </section>
+
     <section class="list-wrap">
       <h2>Pubs</h2>
       <div id="pubList" class="pub-list"></div>
+    </section>
+
+    <section class="list-wrap">
+      <h2>Recent Check-Ins</h2>
+      <div id="checkinList" class="checkin-list"></div>
     </section>
   </div>
 
@@ -55,7 +67,9 @@
       addDoc,
       getDocs,
       query,
-      where
+      where,
+      orderBy,
+      limit
     } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
     import {
       getAuth,
@@ -70,6 +84,9 @@
       messagingSenderId: "63376472196",
       appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
     };
+
+    const CHECKIN_RADIUS_METERS = 50;
+    const CHECKIN_COOLDOWN_MINUTES = 60;
 
     const westminsterPubs = [
       {
@@ -115,13 +132,17 @@
 
     const statusEl = document.getElementById("status");
     const pubListEl = document.getElementById("pubList");
+    const selectedPubPanelEl = document.getElementById("selectedPubPanel");
+    const checkinListEl = document.getElementById("checkinList");
 
     let map;
     let userMarker = null;
     let accuracyCircle = null;
     let pubMarkers = [];
     let userLatLng = null;
-    let locationWatchId = null;
+    let currentUser = null;
+    let allPubs = [];
+    let selectedPub = null;
 
     function setStatus(message) {
       statusEl.textContent = message;
@@ -152,12 +173,29 @@
       return `${(meters / 1000).toFixed(2)}km away`;
     }
 
+    function formatTimeAgo(timestampMs) {
+      const diffMs = Date.now() - timestampMs;
+      const diffMinutes = Math.floor(diffMs / 60000);
+
+      if (diffMinutes < 1) return "just now";
+      if (diffMinutes === 1) return "1 minute ago";
+      if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours === 1) return "1 hour ago";
+      if (diffHours < 24) return `${diffHours} hours ago`;
+
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return "1 day ago";
+      return `${diffDays} days ago`;
+    }
+
     function initMap() {
       map = L.map("map").setView([51.5007, -0.1290], 15);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: "&copy; OpenStreetMap contributors"
       }).addTo(map);
 
       setStatus("Map loaded. Signing in...");
@@ -166,6 +204,55 @@
     function clearPubMarkers() {
       pubMarkers.forEach(marker => map.removeLayer(marker));
       pubMarkers = [];
+    }
+
+    function getDistanceToPub(pub) {
+      if (!userLatLng) return null;
+      return distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng);
+    }
+
+    function isUserInRange(pub) {
+      const distance = getDistanceToPub(pub);
+      if (distance === null) return false;
+      return distance <= CHECKIN_RADIUS_METERS;
+    }
+
+    function renderSelectedPub() {
+      if (!selectedPub) {
+        selectedPubPanelEl.className = "selected-panel empty";
+        selectedPubPanelEl.innerHTML = "Tap a pub marker or pub card to select a pub.";
+        return;
+      }
+
+      const distance = getDistanceToPub(selectedPub);
+      const inRange = isUserInRange(selectedPub);
+
+      selectedPubPanelEl.className = "selected-panel";
+
+      selectedPubPanelEl.innerHTML = `
+        <div class="selected-title">${selectedPub.name}</div>
+        <div class="selected-meta">${selectedPub.area} • ${(selectedPub.tags || []).join(", ")}</div>
+        <div class="selected-meta">${selectedPub.lat.toFixed(5)}, ${selectedPub.lng.toFixed(5)}</div>
+        <div class="selected-distance">
+          ${
+            distance === null
+              ? "Allow location to see your distance."
+              : `${formatDistance(distance)} • ${inRange ? "You can check in" : `Need to be within ${CHECKIN_RADIUS_METERS}m`}`
+          }
+        </div>
+        <div class="selected-actions">
+          <button onclick="checkInSelectedPub()">Check In Here</button>
+        </div>
+      `;
+    }
+
+    function selectPub(pub, zoomToMap = true) {
+      selectedPub = pub;
+      renderSelectedPub();
+
+      if (zoomToMap) {
+        map.setView([pub.lat, pub.lng], 17);
+      }
     }
 
     function renderPubList(pubs) {
@@ -189,13 +276,17 @@
         card.className = "pub-card";
         card.type = "button";
 
+        if (selectedPub && selectedPub.id === pub.id) {
+          card.classList.add("selected");
+        }
+
         const title = document.createElement("div");
         title.className = "pub-name";
         title.textContent = pub.name;
 
         const meta = document.createElement("div");
         meta.className = "pub-meta";
-        meta.textContent = `${pub.area} • ${Array.isArray(pub.tags) ? pub.tags.join(", ") : ""}`;
+        meta.textContent = `${pub.area} • ${(pub.tags || []).join(", ")}`;
 
         const coords = document.createElement("div");
         coords.className = "pub-coords";
@@ -204,8 +295,8 @@
         card.appendChild(title);
         card.appendChild(meta);
 
-        if (userLatLng) {
-          const distance = distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng);
+        const distance = getDistanceToPub(pub);
+        if (distance !== null) {
           const distanceEl = document.createElement("div");
           distanceEl.className = "pub-distance";
           distanceEl.textContent = formatDistance(distance);
@@ -215,7 +306,8 @@
         card.appendChild(coords);
 
         card.addEventListener("click", () => {
-          map.setView([pub.lat, pub.lng], 17);
+          selectPub(pub, true);
+          renderPubList(allPubs);
         });
 
         pubListEl.appendChild(card);
@@ -226,9 +318,8 @@
       clearPubMarkers();
 
       pubs.forEach(pub => {
-        const distanceText = userLatLng
-          ? `<br><strong>${formatDistance(distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng))}</strong>`
-          : "";
+        const distance = getDistanceToPub(pub);
+        const distanceText = distance !== null ? `<br><strong>${formatDistance(distance)}</strong>` : "";
 
         const marker = L.marker([pub.lat, pub.lng]).addTo(map);
 
@@ -241,7 +332,48 @@
           </div>
         `);
 
+        marker.on("click", () => {
+          selectPub(pub, false);
+          renderPubList(allPubs);
+        });
+
         pubMarkers.push(marker);
+      });
+    }
+
+    async function renderRecentCheckins() {
+      checkinListEl.innerHTML = "";
+
+      const q = query(
+        collection(db, "checkins"),
+        orderBy("createdAtMs", "desc"),
+        limit(10)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        checkinListEl.innerHTML = '<div class="empty-state">No check-ins yet.</div>';
+        return;
+      }
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+
+        const card = document.createElement("div");
+        card.className = "checkin-card";
+
+        const title = document.createElement("div");
+        title.className = "checkin-title";
+        title.textContent = data.pubName || "Unknown pub";
+
+        const meta = document.createElement("div");
+        meta.className = "checkin-meta";
+        meta.textContent = `User ${String(data.userId || "").slice(0, 8)} • ${formatTimeAgo(data.createdAtMs || Date.now())}`;
+
+        card.appendChild(title);
+        card.appendChild(meta);
+        checkinListEl.appendChild(card);
       });
     }
 
@@ -271,8 +403,18 @@
         });
       });
 
+      allPubs = pubs;
+
+      if (selectedPub) {
+        const updatedSelectedPub = pubs.find(pub => pub.id === selectedPub.id);
+        if (updatedSelectedPub) {
+          selectedPub = updatedSelectedPub;
+        }
+      }
+
       renderPubMarkers(pubs);
       renderPubList(pubs);
+      renderSelectedPub();
 
       setStatus(`Loaded ${pubs.length} pub${pubs.length === 1 ? "" : "s"}.`);
     }
@@ -299,6 +441,7 @@
     async function refreshPubs() {
       try {
         await loadPubsFromFirestore();
+        await renderRecentCheckins();
       } catch (error) {
         console.error(error);
         setStatus(`Could not refresh pubs: ${error.message}`);
@@ -325,6 +468,10 @@
         accuracyCircle.setLatLng([lat, lng]);
         accuracyCircle.setRadius(accuracy);
       }
+
+      renderPubMarkers(allPubs);
+      renderPubList(allPubs);
+      renderSelectedPub();
     }
 
     function startLiveLocation() {
@@ -335,8 +482,8 @@
 
       setStatus("Requesting your live location...");
 
-      locationWatchId = navigator.geolocation.watchPosition(
-        async position => {
+      navigator.geolocation.watchPosition(
+        position => {
           const { latitude, longitude, accuracy } = position.coords;
 
           updateUserLocation(latitude, longitude, accuracy);
@@ -345,7 +492,6 @@
             map.setView([latitude, longitude], 16);
           }
 
-          await refreshPubs();
           setStatus("Live location active.");
         },
         error => {
@@ -372,16 +518,100 @@
       }
     }
 
+    async function getLatestCheckinForPub(pubId, userId) {
+      const q = query(
+        collection(db, "checkins"),
+        where("pubId", "==", pubId),
+        where("userId", "==", userId)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        return null;
+      }
+
+      let latest = null;
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (!latest || (data.createdAtMs || 0) > (latest.createdAtMs || 0)) {
+          latest = data;
+        }
+      });
+
+      return latest;
+    }
+
+    async function checkInSelectedPub() {
+      if (!selectedPub) {
+        setStatus("Select a pub first.");
+        return;
+      }
+
+      if (!currentUser) {
+        setStatus("User not ready yet.");
+        return;
+      }
+
+      if (!userLatLng) {
+        setStatus("Your live location is not ready yet.");
+        return;
+      }
+
+      const distance = getDistanceToPub(selectedPub);
+
+      if (distance === null || distance > CHECKIN_RADIUS_METERS) {
+        setStatus(`Too far away. You must be within ${CHECKIN_RADIUS_METERS}m to check in.`);
+        return;
+      }
+
+      try {
+        setStatus(`Checking in at ${selectedPub.name}...`);
+
+        const latestCheckin = await getLatestCheckinForPub(selectedPub.id, currentUser.uid);
+
+        if (latestCheckin) {
+          const minutesSinceLastCheckin = Math.floor((Date.now() - latestCheckin.createdAtMs) / 60000);
+
+          if (minutesSinceLastCheckin < CHECKIN_COOLDOWN_MINUTES) {
+            const minutesLeft = CHECKIN_COOLDOWN_MINUTES - minutesSinceLastCheckin;
+            setStatus(`Cooldown active. Try again in ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}.`);
+            return;
+          }
+        }
+
+        await addDoc(collection(db, "checkins"), {
+          pubId: selectedPub.id,
+          pubName: selectedPub.name,
+          userId: currentUser.uid,
+          userLat: userLatLng.lat,
+          userLng: userLatLng.lng,
+          createdAtMs: Date.now(),
+          createdAtIso: new Date().toISOString()
+        });
+
+        setStatus(`Checked in at ${selectedPub.name}.`);
+        await renderRecentCheckins();
+      } catch (error) {
+        console.error(error);
+        setStatus(`Check-in failed: ${error.message}`);
+      }
+    }
+
     window.loadWestminsterPubs = loadWestminsterPubs;
     window.refreshPubs = refreshPubs;
     window.centerOnUser = centerOnUser;
+    window.checkInSelectedPub = checkInSelectedPub;
 
     async function startApp() {
       try {
         initMap();
-        await signInAnonymously(auth);
+        const authResult = await signInAnonymously(auth);
+        currentUser = authResult.user;
         setStatus("Signed in. Loading pubs...");
         await loadPubsFromFirestore();
+        await renderRecentCheckins();
         startLiveLocation();
       } catch (error) {
         console.error(error);
