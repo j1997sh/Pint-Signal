@@ -1,13 +1,16 @@
 /* =========================
    RESET
 ========================= */
-
 * {
   box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
+  padding: 0;
+}
+
+body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   background: #161311;
   color: #f5efe6;
@@ -16,7 +19,6 @@ body {
 /* =========================
    LAYOUT
 ========================= */
-
 .page {
   max-width: 1100px;
   margin: 0 auto;
@@ -24,20 +26,19 @@ body {
 }
 
 .page-narrow {
-  max-width: 720px;
+  max-width: 760px;
 }
 
 /* =========================
-   TOPBAR
+   TOP BAR
 ========================= */
-
 .topbar {
-  background: rgba(18, 15, 13, 0.82);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 210, 122, 0.12);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 1000;
+  background: rgba(18, 15, 13, 0.82);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 210, 122, 0.10);
 }
 
 .topbar-inner {
@@ -47,6 +48,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 
 .brand-title {
@@ -58,10 +60,16 @@ body {
 .brand-subtitle {
   font-size: 12px;
   color: #c8bba9;
+  margin-top: 2px;
+}
+
+.menu {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .menu a {
-  margin-left: 16px;
   text-decoration: none;
   color: #d7c5aa;
   font-size: 14px;
@@ -74,16 +82,14 @@ body {
 /* =========================
    PANELS
 ========================= */
-
 .panel {
   margin-top: 24px;
-  background:
-    linear-gradient(180deg, rgba(36, 29, 24, 0.96), rgba(26, 21, 18, 0.96));
+  background: linear-gradient(180deg, rgba(36, 29, 24, 0.96), rgba(26, 21, 18, 0.96));
   border: 1px solid rgba(255, 210, 122, 0.10);
   border-radius: 22px;
   padding: 20px;
   box-shadow:
-    0 10px 30px rgba(0,0,0,0.30),
+    0 10px 30px rgba(0, 0, 0, 0.30),
     inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
@@ -106,23 +112,22 @@ body {
 /* =========================
    MAP
 ========================= */
-
 .map-shell {
   position: relative;
   margin-top: 14px;
   height: 520px;
   border-radius: 24px;
   overflow: hidden;
-  border: 1px solid rgba(255, 210, 122, 0.18);
+  border: 1px solid rgba(255, 210, 122, 0.16);
   background: #0f0d0c;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,0.02),
-    0 8px 30px rgba(0,0,0,0.35);
+    0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
 #map {
-  height: 100%;
   width: 100%;
+  height: 100%;
   z-index: 1;
 }
 
@@ -133,10 +138,10 @@ body {
   z-index: 400;
   background:
     radial-gradient(circle at center,
-      rgba(0,0,0,0.00) 35%,
-      rgba(0,0,0,0.18) 58%,
-      rgba(0,0,0,0.38) 82%,
-      rgba(0,0,0,0.62) 100%);
+      rgba(0,0,0,0.00) 34%,
+      rgba(0,0,0,0.16) 56%,
+      rgba(0,0,0,0.34) 80%,
+      rgba(0,0,0,0.58) 100%);
 }
 
 .map-overlay-noise {
@@ -144,16 +149,15 @@ body {
   position: absolute;
   inset: 0;
   z-index: 401;
-  opacity: 0.08;
-  background-image:
-    radial-gradient(rgba(255,255,255,0.35) 0.7px, transparent 0.7px);
+  opacity: 0.07;
+  background-image: radial-gradient(rgba(255,255,255,0.4) 0.7px, transparent 0.7px);
   background-size: 8px 8px;
   mix-blend-mode: soft-light;
 }
 
 .leaflet-container {
   background: #0f0d0c;
-  filter: saturate(0.72) contrast(1.05) brightness(0.94);
+  filter: saturate(0.72) contrast(1.06) brightness(0.94);
 }
 
 .leaflet-control-zoom {
@@ -178,10 +182,73 @@ body {
   color: #f5efe6;
 }
 
-/* =========================
-   HERO / STATS
-========================= */
+.leaflet-popup-content strong {
+  color: #fff4df;
+}
 
+/* =========================
+   MAP MARKERS
+========================= */
+.pint-marker {
+  background: transparent;
+  border: none;
+}
+
+.pint-marker-inner {
+  font-size: 24px;
+  line-height: 1;
+  transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+}
+
+.pint-marker-default {
+  opacity: 0.90;
+  filter:
+    drop-shadow(0 0 6px rgba(255, 191, 94, 0.16))
+    drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+}
+
+.pint-marker-visited {
+  transform: scale(1.16);
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 10px rgba(255, 210, 122, 0.65))
+    drop-shadow(0 0 18px rgba(255, 184, 77, 0.34))
+    drop-shadow(0 4px 10px rgba(0,0,0,0.35));
+}
+
+/* For the newer simple signal/pint map version */
+.signal {
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0.38;
+  filter:
+    grayscale(1)
+    brightness(0.85)
+    drop-shadow(0 2px 6px rgba(0,0,0,0.45));
+  transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
+}
+
+.signal.on {
+  opacity: 1;
+  transform: scale(1.18);
+  filter:
+    grayscale(0)
+    brightness(1.05)
+    drop-shadow(0 0 10px rgba(255, 210, 122, 0.48))
+    drop-shadow(0 0 18px rgba(255, 184, 77, 0.24));
+}
+
+.pint {
+  font-size: 20px;
+  line-height: 1;
+  filter:
+    drop-shadow(0 0 6px rgba(255, 191, 94, 0.24))
+    drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+}
+
+/* =========================
+   TYPOGRAPHY / HERO
+========================= */
 .hero-title {
   font-size: 36px;
   font-weight: 700;
@@ -199,6 +266,28 @@ body {
   font-weight: 700;
 }
 
+.stack-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff4df;
+  margin-bottom: 4px;
+}
+
+.stack-price {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffd27a;
+  margin-bottom: 4px;
+}
+
+.stack-meta {
+  font-size: 13px;
+  color: #bba98f;
+}
+
+/* =========================
+   STATS
+========================= */
 .stats-row {
   display: flex;
   gap: 12px;
@@ -208,10 +297,10 @@ body {
 
 .mini-stat {
   flex: 1;
+  min-width: 150px;
   background: rgba(255,255,255,0.04);
   border-radius: 14px;
   padding: 12px;
-  min-width: 150px;
   border: 1px solid rgba(255,255,255,0.03);
 }
 
@@ -226,37 +315,21 @@ body {
   font-size: 18px;
   font-weight: 700;
   color: #fff4df;
+  margin-top: 4px;
 }
 
 /* =========================
-   PROGRESS BAR
+   CARDS / LISTS
 ========================= */
-
-.passport-progress-wrap {
-  margin-top: 16px;
-}
-
-.passport-progress-bar {
-  height: 10px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.passport-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #ff9500, #ffd86b);
-}
-
-/* =========================
-   CARDS
-========================= */
-
-.info-card {
+.info-card,
+.totaliser-card,
+.awareness-card,
+.passport-summary-card,
+.pub-hero-card {
   background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.04);
   border-radius: 18px;
   padding: 16px;
-  border: 1px solid rgba(255,255,255,0.04);
 }
 
 .stack-list {
@@ -269,36 +342,23 @@ body {
   background: rgba(255,255,255,0.04);
   border-radius: 16px;
   padding: 12px;
-  text-align: left;
   border: 1px solid rgba(255,255,255,0.04);
-  cursor: pointer;
   color: #f5efe6;
+  text-align: left;
 }
 
 .stack-card:hover {
   background: rgba(255,255,255,0.06);
 }
 
-.stack-title {
-  font-weight: 700;
-  color: #fff4df;
-}
-
-.stack-meta {
-  font-size: 13px;
-  color: #bba98f;
-}
-
-.stack-price {
-  font-size: 22px;
-  font-weight: 700;
-  color: #ffd27a;
+.pub-list-card {
+  width: 100%;
+  cursor: pointer;
 }
 
 /* =========================
    BUTTONS
 ========================= */
-
 button {
   background: linear-gradient(180deg, #201a16, #161210);
   color: #fff2d5;
@@ -324,15 +384,23 @@ button:hover {
 /* =========================
    FORMS
 ========================= */
-
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-.form-grid.single-column {
+.single-column {
   grid-template-columns: 1fr;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
 }
 
 .form-field span {
@@ -355,63 +423,17 @@ select {
   color: #fff4df;
 }
 
+input::placeholder {
+  color: #9f907a;
+}
+
 .passport-select {
   background: rgba(255,255,255,0.04);
 }
 
 /* =========================
-   EMPTY STATE
+   TOTALISER / MONEY
 ========================= */
-
-.empty-state {
-  color: #bba98f;
-  text-align: center;
-  padding: 16px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 14px;
-}
-
-/* =========================
-   MARKERS
-========================= */
-
-.pint-marker {
-  background: transparent;
-  border: none;
-}
-
-.pint-marker-inner {
-  font-size: 24px;
-  line-height: 1;
-  transition: transform 0.2s ease;
-}
-
-.pint-marker-default {
-  filter:
-    drop-shadow(0 0 6px rgba(255, 191, 94, 0.18))
-    drop-shadow(0 2px 6px rgba(0,0,0,0.35));
-  opacity: 0.88;
-}
-
-.pint-marker-visited {
-  transform: scale(1.14);
-  filter:
-    drop-shadow(0 0 10px rgba(255, 210, 122, 0.65))
-    drop-shadow(0 0 18px rgba(255, 184, 77, 0.35))
-    drop-shadow(0 4px 10px rgba(0,0,0,0.35));
-}
-
-/* =========================
-   MONEY / TOTALISER
-========================= */
-
-.totaliser-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.04);
-  border-radius: 18px;
-  padding: 16px;
-}
-
 .totaliser-top {
   display: flex;
   justify-content: space-between;
@@ -438,17 +460,6 @@ select {
   background: #c5933d;
 }
 
-.awareness-result {
-  margin-top: 14px;
-}
-
-.awareness-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.04);
-  border-radius: 16px;
-  padding: 16px;
-}
-
 .money-bar {
   display: flex;
   height: 14px;
@@ -459,10 +470,21 @@ select {
   background: rgba(255,255,255,0.08);
 }
 
-.money-gov { background: #b84937; }
-.money-beer { background: #6e7d8a; }
-.money-overheads { background: #4e4946; }
-.money-pub { background: #c5933d; }
+.money-gov {
+  background: #b84937;
+}
+
+.money-beer {
+  background: #6e7d8a;
+}
+
+.money-overheads {
+  background: #4e4946;
+}
+
+.money-pub {
+  background: #c5933d;
+}
 
 .money-legend {
   display: grid;
@@ -554,13 +576,10 @@ select {
 }
 
 /* =========================
-   PASSPORT / PUB
+   PASSPORT
 ========================= */
-
 .passport-summary-card {
   background: linear-gradient(180deg, rgba(51,39,27,0.92), rgba(30,24,19,0.92));
-  border-radius: 18px;
-  padding: 16px;
   border: 1px solid rgba(255, 210, 122, 0.10);
 }
 
@@ -578,6 +597,22 @@ select {
   padding: 8px 14px;
   border-radius: 999px;
   font-weight: 700;
+}
+
+.passport-progress-wrap {
+  margin-top: 16px;
+}
+
+.passport-progress-bar {
+  height: 10px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.passport-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff9500, #ffd86b);
 }
 
 .badge-row {
@@ -606,7 +641,7 @@ select {
 
 .passport-grid {
   display: grid;
-  grid-template-columns: repeat(2,1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 
@@ -625,6 +660,14 @@ select {
   border-color: rgba(255, 210, 122, 0.45);
 }
 
+.stamp-status {
+  font-size: 10px;
+  color: #bba98f;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .stamp-emoji {
   font-size: 28px;
   margin: 6px 0;
@@ -639,6 +682,9 @@ select {
   color: #bba98f;
 }
 
+/* =========================
+   PUB PAGE
+========================= */
 .back-link {
   text-decoration: none;
   color: #ffd27a;
@@ -648,8 +694,6 @@ select {
 
 .pub-hero-card {
   background: linear-gradient(180deg, rgba(56,42,29,0.92), rgba(31,24,18,0.92));
-  padding: 16px;
-  border-radius: 18px;
   border: 1px solid rgba(255,210,122,0.12);
 }
 
@@ -700,8 +744,55 @@ select {
 }
 
 /* =========================
+   QUICK LINKS
+========================= */
+.quick-link-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quick-link-card {
+  flex: 1;
+  min-width: 180px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 16px;
+  padding: 14px;
+  text-decoration: none;
+  color: #f5efe6;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.quick-link-card:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.quick-link-emoji {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.quick-link-title {
+  font-weight: 700;
+  color: #fff4df;
+  margin-bottom: 4px;
+}
+
+.quick-link-text {
+  font-size: 13px;
+  color: #bba98f;
+}
+
+/* =========================
    HELPERS
 ========================= */
+.empty-state {
+  color: #bba98f;
+  text-align: center;
+  padding: 16px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 14px;
+}
 
 .top-gap {
   margin-top: 12px;
@@ -714,7 +805,6 @@ code {
 /* =========================
    MOBILE
 ========================= */
-
 @media (max-width: 700px) {
   .topbar-inner {
     flex-direction: column;
