@@ -81,12 +81,52 @@ button:hover {
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.08);
 }
 
+.selected-wrap,
+.list-wrap {
+  margin-bottom: 24px;
+}
+
+.selected-wrap h2,
 .list-wrap h2 {
   margin: 0 0 16px;
   font-size: 28px;
 }
 
-.pub-list {
+.selected-panel {
+  background: white;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.selected-panel.empty {
+  color: #666;
+}
+
+.selected-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.selected-meta {
+  font-size: 18px;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.selected-distance {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 12px 0 0;
+}
+
+.selected-actions {
+  margin-top: 16px;
+}
+
+.pub-list,
+.checkin-list {
   display: grid;
   gap: 14px;
 }
@@ -98,6 +138,10 @@ button:hover {
   border-radius: 16px;
   padding: 18px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.pub-card.selected {
+  outline: 3px solid #2f80ed;
 }
 
 .pub-name {
@@ -123,6 +167,24 @@ button:hover {
   color: #777;
 }
 
+.checkin-card {
+  background: white;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.checkin-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.checkin-meta {
+  font-size: 16px;
+  color: #555;
+}
+
 .empty-state {
   background: white;
   border-radius: 16px;
@@ -144,12 +206,15 @@ button:hover {
     height: 360px;
   }
 
-  .pub-name {
+  .pub-name,
+  .selected-title {
     font-size: 20px;
   }
 
   .pub-meta,
-  .pub-distance {
+  .pub-distance,
+  .selected-meta,
+  .selected-distance {
     font-size: 16px;
   }
 }
