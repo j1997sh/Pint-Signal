@@ -42,6 +42,14 @@
 
     <section class="panel">
       <div class="panel-header">
+        <h2>Westminster Pub Dataset</h2>
+        <p>Your imported pub list from <code>westminster-pubs.js</code></p>
+      </div>
+      <div id="datasetCard" class="totaliser-card">Loading pub dataset...</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
         <h2>Community Totaliser</h2>
         <p>What all logged pints add up to across the app</p>
       </div>
@@ -92,6 +100,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
     import {
       getFirestore,
@@ -116,12 +125,14 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
+    const datasetCardEl = document.getElementById("datasetCard");
     const communityTotalsEl = document.getElementById("communityTotals");
     const cheapestEl = document.getElementById("cheapest");
 
     let map = L.map("map").setView([51.5007, -0.1290], 15);
     let userLatLng = null;
     let userMarker = null;
+    let pubMarkers = [];
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: "&copy; OpenStreetMap & CARTO",
@@ -156,10 +167,6 @@
 
       return {
         salePrice: price,
-        vat,
-        beerDuty,
-        beerCost,
-        overheads,
         governmentRevenue,
         pubSurplus
       };
@@ -181,25 +188,89 @@
       `;
     }
 
-    async function load() {
+    function hasCoordinates(pub) {
+      return (
+        typeof pub.lat === "number" &&
+        typeof pub.lng === "number" &&
+        !Number.isNaN(pub.lat) &&
+        !Number.isNaN(pub.lng)
+      );
+    }
+
+    function clearPubMarkers() {
+      pubMarkers.forEach(marker => map.removeLayer(marker));
+      pubMarkers = [];
+    }
+
+    function renderHardcodedPubsOnMap() {
+      clearPubMarkers();
+
+      const mappablePubs = westminsterPubs.filter(hasCoordinates);
+
+      mappablePubs.forEach(pub => {
+        const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width: 180px;">
+            <strong>${pub.name}</strong><br>
+            ${pub.address || ""}<br>
+            ${pub.postcode || ""}
+          </div>
+        `);
+
+        marker.on("click", () => {
+          const urlId = encodeURIComponent(pub.id);
+          window.location.href = `pub.html?id=${urlId}`;
+        });
+
+        pubMarkers.push(marker);
+      });
+    }
+
+    function renderDatasetCard() {
+      const total = westminsterPubs.length;
+      const mapped = westminsterPubs.filter(hasCoordinates).length;
+      const missing = total - mapped;
+
+      datasetCardEl.innerHTML = `
+        <div class="totaliser-top">
+          <div>
+            <div class="hero-badge">Imported File</div>
+            <div class="hero-title">${total} Westminster pubs</div>
+            <div class="stack-meta">Loaded from <code>westminster-pubs.js</code></div>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Total pubs</div>
+            <div class="mini-stat-value">${total}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Map-ready</div>
+            <div class="mini-stat-value">${mapped}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Need coordinates</div>
+            <div class="mini-stat-value">${missing}</div>
+          </div>
+        </div>
+
+        <div class="comparison-line compact">
+          Only pubs with real <strong>lat</strong> and <strong>lng</strong> are shown on the map.
+        </div>
+      `;
+    }
+
+    async function loadCommunityData() {
       await signInAnonymously(auth);
 
-      const pubSnap = await getDocs(collection(db, "pubs"));
       const priceSnap = await getDocs(collection(db, "prices"));
-
       const prices = [];
+
       let totalSpent = 0;
       let totalGovernmentRevenue = 0;
       let totalPubSurplus = 0;
-
-      pubSnap.forEach(doc => {
-        const pub = doc.data();
-
-        const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
-        marker.on("click", () => {
-          window.location.href = `pub.html?id=${doc.id}`;
-        });
-      });
 
       priceSnap.forEach(doc => {
         const data = doc.data();
@@ -304,7 +375,13 @@
 
     window.centerOnUser = centerOnUser;
 
-    load();
+    async function start() {
+      renderDatasetCard();
+      renderHardcodedPubsOnMap();
+      await loadCommunityData();
+    }
+
+    start();
   </script>
 </body>
 </html>
