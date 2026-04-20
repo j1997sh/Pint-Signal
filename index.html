@@ -19,6 +19,8 @@
         <a href="index.html">Home</a>
         <a href="passport.html">Passport</a>
         <a href="activity.html">Activity</a>
+        <a href="leaderboard.html">Leaderboard</a>
+        <a href="add-pub.html">Add a Pub</a>
       </nav>
     </div>
   </header>
@@ -30,6 +32,32 @@
         <p>Your current XP, badge tier, and contribution stats</p>
       </div>
       <div id="xpCard" class="info-card">Loading progress...</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Quick Links</h2>
+        <p>Jump straight into the big features</p>
+      </div>
+      <div class="quick-link-grid">
+        <a class="quick-link-card" href="passport.html">
+          <div class="quick-link-emoji">🪪</div>
+          <div class="quick-link-title">Pub Passport</div>
+          <div class="quick-link-text">Track visited pubs and unlock badges.</div>
+        </a>
+
+        <a class="quick-link-card" href="leaderboard.html">
+          <div class="quick-link-emoji">🏆</div>
+          <div class="quick-link-title">Price Leaderboard</div>
+          <div class="quick-link-text">See the cheapest pints and top value pubs.</div>
+        </a>
+
+        <a class="quick-link-card" href="add-pub.html">
+          <div class="quick-link-emoji">➕</div>
+          <div class="quick-link-title">Add a Pub</div>
+          <div class="quick-link-text">Suggest a new pub for the map.</div>
+        </a>
+      </div>
     </section>
 
     <section class="panel">
@@ -83,7 +111,6 @@
     let map = L.map("map").setView([51.5007, -0.1290], 15);
     let userLatLng = null;
     let userMarker = null;
-    let pubs = [];
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: "&copy; OpenStreetMap & CARTO",
@@ -154,10 +181,6 @@
 
       pubSnap.forEach(doc => {
         const pub = doc.data();
-        pubs.push({
-          id: doc.id,
-          ...pub
-        });
 
         const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
         marker.on("click", () => {
