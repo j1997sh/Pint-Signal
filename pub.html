@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+  <a href="index.html">← Back</a>
+</header>
+
+<main class="page">
+
+<div id="pub"></div>
+
+<h3>Submit Price</h3>
+<input id="drink" placeholder="Drink">
+<input id="price" placeholder="Price">
+<button onclick="submit()">Submit</button>
+
+<h3>History</h3>
+<div id="history"></div>
+
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, addDoc, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "YOUR KEY",
+  authDomain: "pintsignal.firebaseapp.com",
+  projectId: "pintsignal"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const params = new URLSearchParams(window.location.search);
+const id = params.get("id");
+
+async function load(){
+  const d = await getDoc(doc(db,"pubs",id));
+  const p = d.data();
+
+  document.getElementById("pub").innerHTML = `
+    <h2>${p.name}</h2>
+    ${p.area}
+  `;
+
+  const q = query(collection(db,"prices"),where("pubId","==",id),orderBy("createdAtMs","desc"));
+  const s = await getDocs(q);
+
+  s.forEach(doc=>{
+    const d = doc.data();
+    const div = document.createElement("div");
+    div.className="card";
+    div.innerHTML=`${d.drinkName} £${d.price}`;
+    document.getElementById("history").appendChild(div);
+  });
+}
+
+window.submit = async ()=>{
+  await addDoc(collection(db,"prices"),{
+    pubId:id,
+    drinkName:document.getElementById("drink").value,
+    price:Number(document.getElementById("price").value),
+    createdAtMs:Date.now()
+  });
+  location.reload();
+}
+
+load();
+</script>
+
+</body>
+</html>
