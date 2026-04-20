@@ -1,60 +1,282 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Passport</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal 🍺</div>
+        <div class="brand-subtitle">Pub passport</div>
+      </div>
 
-<header class="topbar">
-  <a href="index.html">← Home</a>
-</header>
+      <nav class="menu">
+        <a href="index.html">Home</a>
+        <a href="passport.html">Passport</a>
+        <a href="activity.html">Activity</a>
+      </nav>
+    </div>
+  </header>
 
-<main class="page">
+  <main class="page">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Passport Summary</h2>
+        <p>Your visited pubs, progress, and badge tier</p>
+      </div>
 
-<h2>Passport</h2>
-<div id="passport"></div>
+      <div id="passportSummary" class="passport-summary-card">Loading passport...</div>
+    </section>
 
-</main>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Your Badges</h2>
+        <p>Unlock more by checking in and submitting prices</p>
+      </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+      <div id="badgeRow" class="badge-row"></div>
+    </section>
 
-const app=initializeApp({
-  apiKey:"AIzaSyB...",
-  authDomain:"pintsignal.firebaseapp.com",
-  projectId:"pintsignal"
-});
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Visited Pubs</h2>
+        <p>Your collected passport stamps</p>
+      </div>
+      <div id="visitedPubs" class="passport-grid"></div>
+    </section>
 
-const db=getFirestore(app);
-const auth=getAuth(app);
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Still To Visit</h2>
+        <p>Complete the Westminster collection</p>
+      </div>
+      <div id="unvisitedPubs" class="passport-grid"></div>
+    </section>
+  </main>
 
-async function load(){
-  const u=await signInAnonymously(auth);
-  const uid=u.user.uid;
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    import {
+      getAuth,
+      signInAnonymously
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
-  const pubs=await getDocs(collection(db,"pubs"));
-  const checkins=await getDocs(collection(db,"checkins"));
+    const app = initializeApp({
+      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+      authDomain: "pintsignal.firebaseapp.com",
+      projectId: "pintsignal"
+    });
 
-  let visited=new Set();
-  checkins.forEach(d=>{
-    if(d.data().userId===uid) visited.add(d.data().pubId);
-  });
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-  pubs.forEach(doc=>{
-    const p=doc.data();
-    const div=document.createElement("div");
-    div.className="card";
-    div.innerHTML=`${visited.has(doc.id)?"✅":"⬜"} ${p.name}`;
-    document.getElementById("passport").appendChild(div);
-  });
-}
+    const summaryEl = document.getElementById("passportSummary");
+    const badgeRowEl = document.getElementById("badgeRow");
+    const visitedPubsEl = document.getElementById("visitedPubs");
+    const unvisitedPubsEl = document.getElementById("unvisitedPubs");
 
-load();
-</script>
+    function getBadgeTier(visitedCount, priceCount) {
+      const xp = (visitedCount * 10) + (priceCount * 15);
 
+      if (xp >= 300) {
+        return {
+          label: "🏆 Pint Legend",
+          subtitle: "You’re becoming a Westminster pub master."
+        };
+      }
+
+      if (xp >= 150) {
+        return {
+          label: "🍺 Regular",
+          subtitle: "Solid pub momentum."
+        };
+      }
+
+      if (xp >= 75) {
+        return {
+          label: "🧭 Explorer",
+          subtitle: "You’re building a proper pub trail."
+        };
+      }
+
+      return {
+        label: "✨ New Scout",
+        subtitle: "Start collecting your first stamps."
+      };
+    }
+
+    function buildBadgeData(visitedCount, priceCount, totalPubs) {
+      return [
+        {
+          emoji: visitedCount >= 1 ? "✅" : "⬜",
+          title: "First Stamp",
+          unlocked: visitedCount >= 1
+        },
+        {
+          emoji: visitedCount >= 3 ? "✅" : "⬜",
+          title: "3 Pubs Visited",
+          unlocked: visitedCount >= 3
+        },
+        {
+          emoji: visitedCount >= 5 ? "✅" : "⬜",
+          title: "5 Pubs Visited",
+          unlocked: visitedCount >= 5
+        },
+        {
+          emoji: priceCount >= 1 ? "✅" : "⬜",
+          title: "Price Scout",
+          unlocked: priceCount >= 1
+        },
+        {
+          emoji: priceCount >= 5 ? "✅" : "⬜",
+          title: "Price Machine",
+          unlocked: priceCount >= 5
+        },
+        {
+          emoji: visitedCount === totalPubs && totalPubs > 0 ? "🏁" : "⬜",
+          title: "Westminster Complete",
+          unlocked: visitedCount === totalPubs && totalPubs > 0
+        }
+      ];
+    }
+
+    function createStampCard(pub, visited) {
+      const wrapper = document.createElement("button");
+      wrapper.className = visited ? "passport-stamp visited" : "passport-stamp unvisited";
+      wrapper.type = "button";
+
+      wrapper.innerHTML = `
+        <div class="stamp-status">${visited ? "STAMPED" : "UNVISITED"}</div>
+        <div class="stamp-emoji">${visited ? "🍺" : "📍"}</div>
+        <div class="stamp-title">${pub.name}</div>
+        <div class="stamp-meta">${pub.area || "Westminster"}</div>
+      `;
+
+      wrapper.addEventListener("click", () => {
+        window.location.href = `pub.html?id=${pub.id}`;
+      });
+
+      return wrapper;
+    }
+
+    async function load() {
+      const authResult = await signInAnonymously(auth);
+      const uid = authResult.user.uid;
+
+      const pubsSnap = await getDocs(collection(db, "pubs"));
+      const checkinsSnap = await getDocs(collection(db, "checkins"));
+      const pricesSnap = await getDocs(collection(db, "prices"));
+
+      const visited = new Set();
+      let myPriceCount = 0;
+
+      checkinsSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.userId === uid) {
+          visited.add(data.pubId);
+        }
+      });
+
+      pricesSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.userId === uid) {
+          myPriceCount++;
+        }
+      });
+
+      const pubs = [];
+      pubsSnap.forEach(doc => {
+        pubs.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      const visitedCount = visited.size;
+      const totalPubs = pubs.length;
+      const progressPercent = totalPubs === 0 ? 0 : Math.round((visitedCount / totalPubs) * 100);
+      const xp = (visitedCount * 10) + (myPriceCount * 15);
+      const tier = getBadgeTier(visitedCount, myPriceCount);
+
+      summaryEl.innerHTML = `
+        <div class="passport-hero-row">
+          <div>
+            <div class="hero-badge">${tier.label}</div>
+            <div class="hero-title">${visitedCount} / ${totalPubs} pubs stamped</div>
+            <div class="stack-meta">${tier.subtitle}</div>
+          </div>
+          <div class="passport-xp-pill">${xp} XP</div>
+        </div>
+
+        <div class="passport-progress-wrap">
+          <div class="passport-progress-bar">
+            <div class="passport-progress-fill" style="width:${progressPercent}%"></div>
+          </div>
+          <div class="stack-meta">${progressPercent}% complete</div>
+        </div>
+
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Visited</div>
+            <div class="mini-stat-value">${visitedCount}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Prices</div>
+            <div class="mini-stat-value">${myPriceCount}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Remaining</div>
+            <div class="mini-stat-value">${Math.max(totalPubs - visitedCount, 0)}</div>
+          </div>
+        </div>
+      `;
+
+      const badges = buildBadgeData(visitedCount, myPriceCount, totalPubs);
+      badgeRowEl.innerHTML = "";
+
+      badges.forEach(badge => {
+        const el = document.createElement("div");
+        el.className = badge.unlocked ? "badge-card unlocked" : "badge-card locked";
+        el.innerHTML = `
+          <div class="badge-emoji">${badge.emoji}</div>
+          <div class="badge-title">${badge.title}</div>
+        `;
+        badgeRowEl.appendChild(el);
+      });
+
+      visitedPubsEl.innerHTML = "";
+      unvisitedPubsEl.innerHTML = "";
+
+      const visitedPubs = pubs.filter(pub => visited.has(pub.id));
+      const unvisitedPubs = pubs.filter(pub => !visited.has(pub.id));
+
+      if (visitedPubs.length === 0) {
+        visitedPubsEl.innerHTML = `<div class="empty-state">No passport stamps yet. Go check into your first pub.</div>`;
+      } else {
+        visitedPubs.forEach(pub => {
+          visitedPubsEl.appendChild(createStampCard(pub, true));
+        });
+      }
+
+      if (unvisitedPubs.length === 0) {
+        unvisitedPubsEl.innerHTML = `<div class="empty-state">You’ve visited every loaded pub. Legend.</div>`;
+      } else {
+        unvisitedPubs.forEach(pub => {
+          unvisitedPubsEl.appendChild(createStampCard(pub, false));
+        });
+      }
+    }
+
+    load();
+  </script>
 </body>
 </html>
