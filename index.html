@@ -21,6 +21,7 @@
         <a href="activity.html">Activity</a>
         <a href="leaderboard.html">Leaderboard</a>
         <a href="add-pub.html">Add a Pub</a>
+        <a href="calculator.html">Calculator</a>
       </nav>
     </div>
   </header>
@@ -44,7 +45,7 @@
         <h2>Community Totaliser</h2>
         <p>What all logged pints add up to across the app</p>
       </div>
-      <div id="communityTotals" class="info-card">Loading totals...</div>
+      <div id="communityTotals" class="totaliser-card">Loading totals...</div>
     </section>
 
     <section class="panel">
@@ -53,28 +54,6 @@
         <p>The lowest recent pint prices we know about</p>
       </div>
       <div id="cheapest" class="stack-list"></div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Pint Calculator</h2>
-        <p>See where the money goes for a single pint price</p>
-      </div>
-
-      <div class="info-card">
-        <div class="form-grid single-column">
-          <label class="form-field">
-            <span>Pint price (£)</span>
-            <input id="awarenessPrice" type="number" step="0.01" min="0" value="6.00" placeholder="e.g. 6.00" />
-          </label>
-        </div>
-
-        <div class="controls-row">
-          <button onclick="runAwarenessCalculator()">Calculate</button>
-        </div>
-
-        <div id="awarenessResult" class="awareness-result"></div>
-      </div>
     </section>
 
     <section class="panel">
@@ -99,6 +78,12 @@
           <div class="quick-link-emoji">➕</div>
           <div class="quick-link-title">Add a Pub</div>
           <div class="quick-link-text">Suggest a new pub for the map.</div>
+        </a>
+
+        <a class="quick-link-card" href="calculator.html">
+          <div class="quick-link-emoji">🧮</div>
+          <div class="quick-link-title">Pint Calculator</div>
+          <div class="quick-link-text">See where the money goes for a pint.</div>
         </a>
       </div>
     </section>
@@ -133,7 +118,6 @@
 
     const communityTotalsEl = document.getElementById("communityTotals");
     const cheapestEl = document.getElementById("cheapest");
-    const awarenessResultEl = document.getElementById("awarenessResult");
 
     let map = L.map("map").setView([51.5007, -0.1290], 15);
     let userLatLng = null;
@@ -181,84 +165,18 @@
       };
     }
 
-    function buildMoneyBarHtml(result) {
-      const parts = [
-        { label: "Government", value: Math.max(result.governmentRevenue, 0), className: "money-gov" },
-        { label: "Beer cost", value: Math.max(result.beerCost, 0), className: "money-beer" },
-        { label: "Overheads", value: Math.max(result.overheads, 0), className: "money-overheads" },
-        { label: "Pub surplus", value: Math.max(result.pubSurplus, 0), className: "money-pub" }
-      ];
+    function buildSimpleSplitBar(government, pubSide) {
+      const gov = Math.max(Number(government || 0), 0);
+      const pub = Math.max(Number(pubSide || 0), 0);
+      const total = gov + pub;
 
-      const total = parts.reduce((sum, part) => sum + part.value, 0);
-
-      const barHtml = parts
-        .filter(part => part.value > 0)
-        .map(part => {
-          const width = total > 0 ? (part.value / total) * 100 : 0;
-          return `<div class="${part.className}" style="width:${width}%"></div>`;
-        })
-        .join("");
-
-      const legendHtml = parts
-        .map(part => `
-          <div class="money-legend-item">
-            <span class="money-dot ${part.className}"></span>
-            <span>${part.label}</span>
-            <strong>${formatMoney(part.value)}</strong>
-          </div>
-        `)
-        .join("");
+      const govWidth = total > 0 ? (gov / total) * 100 : 50;
+      const pubWidth = total > 0 ? (pub / total) * 100 : 50;
 
       return `
-        <div class="money-bar">${barHtml}</div>
-        <div class="money-legend">${legendHtml}</div>
-      `;
-    }
-
-    function renderAwarenessResult(priceValue) {
-      const result = calculatePintEconomics(priceValue);
-
-      awarenessResultEl.innerHTML = `
-        <div class="awareness-card">
-          <div class="hero-badge">Calculator</div>
-          <div class="hero-title">${formatPrice(result.salePrice)} pint</div>
-
-          ${buildMoneyBarHtml(result)}
-
-          <div class="breakdown-grid">
-            <div class="breakdown-row">
-              <span>VAT</span>
-              <strong>${formatMoney(result.vat)}</strong>
-            </div>
-            <div class="breakdown-row">
-              <span>Beer duty</span>
-              <strong>${formatMoney(result.beerDuty)}</strong>
-            </div>
-            <div class="breakdown-row">
-              <span>Beer cost</span>
-              <strong>${formatMoney(result.beerCost)}</strong>
-            </div>
-            <div class="breakdown-row">
-              <span>Overheads</span>
-              <strong>${formatMoney(result.overheads)}</strong>
-            </div>
-            <div class="breakdown-row total government">
-              <span>Government revenue</span>
-              <strong>${formatMoney(result.governmentRevenue)}</strong>
-            </div>
-            <div class="breakdown-row total pub-side">
-              <span>Estimated pub surplus after costs</span>
-              <strong>${formatMoney(result.pubSurplus)}</strong>
-            </div>
-          </div>
-
-          <div class="comparison-line">
-            Pub side <strong>${formatMoney(result.pubSurplus)}</strong> vs Government <strong>${formatMoney(result.governmentRevenue)}</strong> per pint
-          </div>
-
-          <div class="calculator-note">
-            Simplified estimate using VAT 20%, beer duty £0.60, beer cost £1.50, and overheads £3.00 per pint.
-          </div>
+        <div class="simple-split-bar">
+          <div class="simple-split-gov" style="width:${govWidth}%"></div>
+          <div class="simple-split-pub" style="width:${pubWidth}%"></div>
         </div>
       `;
     }
@@ -268,7 +186,6 @@
 
       const pubSnap = await getDocs(collection(db, "pubs"));
       const priceSnap = await getDocs(collection(db, "prices"));
-      const checkSnap = await getDocs(collection(db, "checkins"));
 
       const prices = [];
       let totalSpent = 0;
@@ -297,8 +214,13 @@
       });
 
       communityTotalsEl.innerHTML = `
-        <div class="hero-badge">Community Totaliser</div>
-        <div class="hero-title">${prices.length} pints logged</div>
+        <div class="totaliser-top">
+          <div>
+            <div class="hero-badge">Community Totaliser</div>
+            <div class="hero-title">${prices.length} pints logged</div>
+            <div class="stack-meta">Tracked by the Pint Signal community</div>
+          </div>
+        </div>
 
         <div class="stats-row">
           <div class="mini-stat">
@@ -306,21 +228,20 @@
             <div class="mini-stat-value">${formatMoney(totalSpent)}</div>
           </div>
           <div class="mini-stat">
-            <div class="mini-stat-label">Government revenue</div>
+            <div class="mini-stat-label">Government</div>
             <div class="mini-stat-value">${formatMoney(totalGovernmentRevenue)}</div>
           </div>
           <div class="mini-stat">
-            <div class="mini-stat-label">Pub surplus</div>
+            <div class="mini-stat-label">Pub side</div>
             <div class="mini-stat-value">${formatMoney(totalPubSurplus)}</div>
           </div>
         </div>
 
-        ${buildMoneyBarHtml({
-          governmentRevenue: totalGovernmentRevenue,
-          beerCost: prices.length * 1.50,
-          overheads: prices.length * 3.00,
-          pubSurplus: totalPubSurplus
-        })}
+        ${buildSimpleSplitBar(totalGovernmentRevenue, totalPubSurplus)}
+
+        <div class="comparison-line compact">
+          Government <strong>${formatMoney(totalGovernmentRevenue)}</strong> vs Pub side <strong>${formatMoney(totalPubSurplus)}</strong>
+        </div>
       `;
 
       prices.sort((a, b) => Number(a.price) - Number(b.price));
@@ -354,8 +275,6 @@
           cheapestEl.appendChild(card);
         });
       }
-
-      renderAwarenessResult(6);
     }
 
     navigator.geolocation.watchPosition(
@@ -383,20 +302,7 @@
       map.setView(userLatLng, 16);
     }
 
-    function runAwarenessCalculator() {
-      const input = document.getElementById("awarenessPrice");
-      const value = Number(input.value);
-
-      if (Number.isNaN(value) || value <= 0) {
-        awarenessResultEl.innerHTML = `<div class="empty-state">Enter a valid pint price.</div>`;
-        return;
-      }
-
-      renderAwarenessResult(value);
-    }
-
     window.centerOnUser = centerOnUser;
-    window.runAwarenessCalculator = runAwarenessCalculator;
 
     load();
   </script>
