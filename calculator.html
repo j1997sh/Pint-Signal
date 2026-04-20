@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pint Calculator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal 🍺</div>
+        <div class="brand-subtitle">Where your money goes</div>
+      </div>
+
+      <nav class="menu">
+        <a href="index.html">Home</a>
+        <a href="passport.html">Passport</a>
+        <a href="activity.html">Activity</a>
+        <a href="leaderboard.html">Leaderboard</a>
+        <a href="add-pub.html">Add a Pub</a>
+        <a href="calculator.html">Calculator</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page page-narrow">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Pint Calculator</h2>
+        <p>See where the money goes for a single pint price</p>
+      </div>
+
+      <div class="info-card">
+        <div class="form-grid single-column">
+          <label class="form-field">
+            <span>Pint price (£)</span>
+            <input id="awarenessPrice" type="number" step="0.01" min="0" value="6.00" placeholder="e.g. 6.00" />
+          </label>
+        </div>
+
+        <div class="controls-row">
+          <button onclick="runAwarenessCalculator()">Calculate</button>
+        </div>
+
+        <div id="awarenessResult" class="awareness-result"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function formatMoney(value) {
+      return `£${Number(value).toFixed(2)}`;
+    }
+
+    function calculatePintEconomics(salePrice) {
+      const price = Number(salePrice);
+      const vat = price * 0.20;
+      const beerDuty = 0.60;
+      const beerCost = 1.50;
+      const overheads = 3.00;
+      const governmentRevenue = vat + beerDuty;
+      const pubSurplus = price - vat - beerDuty - beerCost - overheads;
+
+      return {
+        salePrice: price,
+        vat,
+        beerDuty,
+        beerCost,
+        overheads,
+        governmentRevenue,
+        pubSurplus
+      };
+    }
+
+    function buildMoneyBarHtml(result) {
+      const parts = [
+        { label: "Government", value: Math.max(result.governmentRevenue, 0), className: "money-gov" },
+        { label: "Beer cost", value: Math.max(result.beerCost, 0), className: "money-beer" },
+        { label: "Overheads", value: Math.max(result.overheads, 0), className: "money-overheads" },
+        { label: "Pub surplus", value: Math.max(result.pubSurplus, 0), className: "money-pub" }
+      ];
+
+      const total = parts.reduce((sum, part) => sum + part.value, 0);
+
+      const barHtml = parts
+        .filter(part => part.value > 0)
+        .map(part => {
+          const width = total > 0 ? (part.value / total) * 100 : 0;
+          return `<div class="${part.className}" style="width:${width}%"></div>`;
+        })
+        .join("");
+
+      const legendHtml = parts
+        .map(part => `
+          <div class="money-legend-item">
+            <span class="money-legend-label"><span class="money-dot ${part.className}"></span>${part.label}</span>
+            <strong>${formatMoney(part.value)}</strong>
+          </div>
+        `)
+        .join("");
+
+      return `
+        <div class="money-bar">${barHtml}</div>
+        <div class="money-legend">${legendHtml}</div>
+      `;
+    }
+
+    function renderAwarenessResult(priceValue) {
+      const result = calculatePintEconomics(priceValue);
+
+      document.getElementById("awarenessResult").innerHTML = `
+        <div class="awareness-card">
+          <div class="hero-badge">Calculator</div>
+          <div class="hero-title">${formatMoney(result.salePrice)} pint</div>
+
+          ${buildMoneyBarHtml(result)}
+
+          <div class="breakdown-grid">
+            <div class="breakdown-row">
+              <span>VAT</span>
+              <strong>${formatMoney(result.vat)}</strong>
+            </div>
+            <div class="breakdown-row">
+              <span>Beer duty</span>
+              <strong>${formatMoney(result.beerDuty)}</strong>
+            </div>
+            <div class="breakdown-row">
+              <span>Beer cost</span>
+              <strong>${formatMoney(result.beerCost)}</strong>
+            </div>
+            <div class="breakdown-row">
+              <span>Overheads</span>
+              <strong>${formatMoney(result.overheads)}</strong>
+            </div>
+            <div class="breakdown-row total government">
+              <span>Government revenue</span>
+              <strong>${formatMoney(result.governmentRevenue)}</strong>
+            </div>
+            <div class="breakdown-row total pub-side">
+              <span>Estimated pub surplus after costs</span>
+              <strong>${formatMoney(result.pubSurplus)}</strong>
+            </div>
+          </div>
+
+          <div class="comparison-line">
+            Government <strong>${formatMoney(result.governmentRevenue)}</strong> vs Pub side <strong>${formatMoney(result.pubSurplus)}</strong> per pint
+          </div>
+
+          <div class="calculator-note">
+            Simplified estimate using VAT 20%, beer duty £0.60, beer cost £1.50, and overheads £3.00 per pint.
+          </div>
+        </div>
+      `;
+    }
+
+    function runAwarenessCalculator() {
+      const input = document.getElementById("awarenessPrice");
+      const value = Number(input.value);
+
+      if (Number.isNaN(value) || value <= 0) {
+        document.getElementById("awarenessResult").innerHTML = `<div class="empty-state">Enter a valid pint price.</div>`;
+        return;
+      }
+
+      renderAwarenessResult(value);
+    }
+
+    window.runAwarenessCalculator = runAwarenessCalculator;
+
+    renderAwarenessResult(6);
+  </script>
+</body>
+</html>
