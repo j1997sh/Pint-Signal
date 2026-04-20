@@ -48,7 +48,7 @@
       <div class="action-grid">
         <div class="info-card">
           <div class="mini-section-title">Check In</div>
-          <div id="checkInStatus" class="stack-meta">Loading status...</div>
+          <div id="checkInStatus" class="stack-meta">Loading pub...</div>
           <div class="controls-row">
             <button onclick="checkIn()">Check In Here</button>
           </div>
@@ -109,6 +109,7 @@
   </main>
 
   <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
     import {
       getFirestore,
@@ -253,9 +254,63 @@
       `;
     }
 
+    function getStoredCoords(pubId) {
+      const raw = localStorage.getItem(`pubcoords_${pubId}`);
+      if (!raw) return null;
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          !Number.isNaN(parsed.lat) &&
+          !Number.isNaN(parsed.lng)
+        ) {
+          return parsed;
+        }
+      } catch (e) {}
+
+      return null;
+    }
+
+    function getResolvedHardcodedPubById(id) {
+      const match = westminsterPubs.find(pub => pub.id === id);
+      if (!match) return null;
+
+      if (
+        typeof match.lat === "number" &&
+        typeof match.lng === "number" &&
+        !Number.isNaN(match.lat) &&
+        !Number.isNaN(match.lng)
+      ) {
+        return match;
+      }
+
+      const stored = getStoredCoords(match.id);
+      if (stored) {
+        return {
+          ...match,
+          lat: stored.lat,
+          lng: stored.lng
+        };
+      }
+
+      return match;
+    }
+
     function renderCheckInStatus() {
       if (!pub) {
         checkInStatusEl.textContent = "Loading pub...";
+        return;
+      }
+
+      if (
+        typeof pub.lat !== "number" ||
+        typeof pub.lng !== "number" ||
+        Number.isNaN(pub.lat) ||
+        Number.isNaN(pub.lng)
+      ) {
+        checkInStatusEl.textContent = "This pub does not have coordinates yet, so distance check-in is unavailable.";
         return;
       }
 
@@ -284,17 +339,30 @@
         return;
       }
 
-      const pubDoc = await getDoc(doc(db, "pubs", pubId));
-
-      if (!pubDoc.exists()) {
-        pubHeroEl.innerHTML = `<div class="empty-state">Pub not found.</div>`;
-        return;
+      // 1. Check hardcoded pub file first
+      const hardcodedPub = getResolvedHardcodedPubById(pubId);
+      if (hardcodedPub) {
+        pub = hardcodedPub;
+      } else {
+        // 2. Fallback to Firestore
+        try {
+          const pubDoc = await getDoc(doc(db, "pubs", pubId));
+          if (pubDoc.exists()) {
+            pub = {
+              id: pubDoc.id,
+              ...pubDoc.data()
+            };
+          }
+        } catch (error) {
+          console.error("Firestore pub lookup failed", error);
+        }
       }
 
-      pub = {
-        id: pubDoc.id,
-        ...pubDoc.data()
-      };
+      if (!pub) {
+        pubHeroEl.innerHTML = `<div class="empty-state">Pub not found.</div>`;
+        checkInStatusEl.textContent = "Pub not found.";
+        return;
+      }
 
       const tags = Array.isArray(pub.tags) ? pub.tags : [];
 
@@ -313,12 +381,12 @@
 
         <div class="stats-row">
           <div class="mini-stat">
-            <div class="mini-stat-label">Latitude</div>
-            <div class="mini-stat-value">${Number(pub.lat).toFixed(4)}</div>
+            <div class="mini-stat-label">Postcode</div>
+            <div class="mini-stat-value">${pub.postcode || "—"}</div>
           </div>
           <div class="mini-stat">
-            <div class="mini-stat-label">Longitude</div>
-            <div class="mini-stat-value">${Number(pub.lng).toFixed(4)}</div>
+            <div class="mini-stat-label">Address</div>
+            <div class="mini-stat-value">${pub.address || "—"}</div>
           </div>
           <div class="mini-stat">
             <div class="mini-stat-label">Passport</div>
@@ -331,6 +399,8 @@
     }
 
     async function loadLatestPrice() {
+      if (!pubId) return;
+
       const q = query(
         collection(db, "prices"),
         where("pubId", "==", pubId),
@@ -399,6 +469,8 @@
 
     async function loadHistory() {
       historyEl.innerHTML = "";
+
+      if (!pubId) return;
 
       const q = query(
         collection(db, "prices"),
@@ -476,6 +548,16 @@
         return;
       }
 
+      if (
+        typeof pub.lat !== "number" ||
+        typeof pub.lng !== "number" ||
+        Number.isNaN(pub.lat) ||
+        Number.isNaN(pub.lng)
+      ) {
+        checkInStatusEl.textContent = "This pub does not have coordinates yet, so check-in is disabled.";
+        return;
+      }
+
       if (!userPosition) {
         checkInStatusEl.textContent = "Allow location to check in.";
         return;
@@ -510,7 +592,19 @@
 
     function openDirections() {
       if (!pub) return;
-      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pub.name + " " + (pub.area || ""))}`;
+
+      if (
+        typeof pub.lat === "number" &&
+        typeof pub.lng === "number" &&
+        !Number.isNaN(pub.lat) &&
+        !Number.isNaN(pub.lng)
+      ) {
+        const url = `https://www.google.com/maps/search/?api=1&query=${pub.lat},${pub.lng}`;
+        window.open(url, "_blank");
+        return;
+      }
+
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pub.name + " " + (pub.address || "") + " " + (pub.postcode || ""))}`;
       window.open(url, "_blank");
     }
 
