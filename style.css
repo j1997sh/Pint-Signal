@@ -173,12 +173,14 @@ body {
 }
 
 .signal-marker-wrap,
-.pint-marker-wrap {
+.pint-marker-wrap,
+.district-label-wrap {
   background: transparent;
   border: none;
 }
 
 .signal-marker {
+  --signal-color: #d4a24c;
   position: relative;
   width: 54px;
   height: 54px;
@@ -198,7 +200,7 @@ body {
 .signal-ring {
   position: absolute;
   border-radius: 999px;
-  border: 1px solid rgba(255, 210, 122, 0.25);
+  border: 1px solid color-mix(in srgb, var(--signal-color) 60%, transparent);
   z-index: 1;
 }
 
@@ -228,14 +230,13 @@ body {
   transform: scale(1.12);
   opacity: 1;
   filter:
-    drop-shadow(0 0 10px rgba(255, 210, 122, 0.65))
-    drop-shadow(0 0 18px rgba(255, 184, 77, 0.34))
+    drop-shadow(0 0 10px color-mix(in srgb, var(--signal-color) 70%, transparent))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--signal-color) 40%, transparent))
     drop-shadow(0 4px 10px rgba(0,0,0,0.35));
 }
 
 .signal-unlocked .signal-ring {
   opacity: 0.55;
-  border-color: rgba(255, 210, 122, 0.45);
 }
 
 .pint-marker-ac {
@@ -244,6 +245,16 @@ body {
   filter:
     drop-shadow(0 0 8px rgba(255, 191, 94, 0.26))
     drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+}
+
+.district-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 239, 214, 0.55);
+  text-align: center;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.5);
 }
 
 .hero-title {
@@ -756,6 +767,87 @@ input::placeholder {
   color: #bba98f;
 }
 
+.district-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.district-row {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.district-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.district-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff4df;
+}
+
+.district-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.district-status,
+.district-count {
+  font-size: 12px;
+  color: #bba98f;
+}
+
+.district-online {
+  color: #ffd27a;
+}
+
+.district-offline {
+  color: #8f8579;
+}
+
+.district-meta {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #bba98f;
+}
+
+.district-progress-bar {
+  height: 10px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.district-progress-fill {
+  height: 100%;
+}
+
+.panel-inline-group {
+  margin-top: 6px;
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff4df;
+  margin-bottom: 10px;
+}
+
 .empty-state {
   color: #bba98f;
   text-align: center;
@@ -799,5 +891,10 @@ code {
 
   .hero-title {
     font-size: 30px;
+  }
+
+  .district-row-top {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
