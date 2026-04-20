@@ -1,398 +1,88 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pint Signal</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div>
-        <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">District Signal Network</div>
-      </div>
 
-      <nav class="menu">
-        <a href="index.html">Map</a>
-        <a href="passport.html">Passport</a>
-        <a href="leaderboard.html">Leaderboard</a>
-      </nav>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-title">Pint Signal</div>
+    <div class="menu">
+      <a href="passport.html">Passport</a>
     </div>
-  </header>
+  </div>
+</div>
 
-  <main class="page">
-    <section class="panel map-panel">
-      <div class="panel-header">
-        <h2>Signal Network</h2>
-        <p>Unlock districts, reveal pubs, and expand across Westminster</p>
-      </div>
+<div id="map"></div>
+<div class="map-fog"></div>
 
-      <div class="map-shell">
-        <div id="map"></div>
-        <div class="map-overlay-vignette"></div>
-        <div class="map-overlay-noise"></div>
-      </div>
+<div class="panel-floating" id="uiCard">
+  <div class="panel-title">Signal Network</div>
+  <div class="panel-sub">Unlock districts to reveal pubs</div>
 
-      <div class="controls-row">
-        <button onclick="centerOnUser()">Center On Me</button>
-      </div>
+  <div id="progressText">0 Signals Active</div>
 
-      <div id="mapStatus" class="stack-meta top-gap">
-        Move to a Signal to bring a district online.
-      </div>
-    </section>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>District Progress</h2>
-        <p>Each district has its own Signal and pub completion</p>
-      </div>
-      <div id="districtCard" class="totaliser-card">Loading districts...</div>
-    </section>
-  </main>
+  <button onclick="centerOnUser()">Center on me</button>
+</div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <script type="module">
-    import { westminsterPubs } from "./westminster-pubs.js";
-    import { signals } from "./signals.js";
-    import { districts, getDistrictById, getDistrictForPub } from "./districts.js";
+<script>
+let map = L.map('map').setView([51.505, -0.09], 14);
 
-    const SIGNAL_RADIUS = 450;
-    const UNLOCK_DISTANCE = 50;
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png').addTo(map);
 
-    let unlockedSignals = new Set(JSON.parse(localStorage.getItem("signals") || "[]"));
+let signals = [
+  {id:1,lat:51.5,lng:-0.12},
+  {id:2,lat:51.51,lng:-0.13},
+  {id:3,lat:51.49,lng:-0.11}
+];
 
-    let map = L.map("map", {
-      zoomControl: true,
-      preferCanvas: true
-    }).setView([51.5007, -0.1290], 14);
+let unlocked = JSON.parse(localStorage.getItem("signals")||"[]");
 
-    let userPos = null;
-    let userMarker = null;
+signals.forEach(s=>{
+  let marker = L.marker([s.lat,s.lng],{
+    icon:L.divIcon({
+      html:`
+      <div class="signal-marker">
+        <div class="signal-core">📡</div>
+        <div class="signal-ring signal-ring-1"></div>
+        <div class="signal-ring signal-ring-2"></div>
+      </div>`
+    })
+  }).addTo(map);
 
-    let signalMarkers = [];
-    let signalRevealCircles = [];
-    let signalGlowCircles = [];
-    let districtLabels = [];
-    let pubMarkers = [];
-
-    const districtCardEl = document.getElementById("districtCard");
-    const mapStatusEl = document.getElementById("mapStatus");
-
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: "&copy; OpenStreetMap & CARTO",
-      maxZoom: 19
-    }).addTo(map);
-
-    function getStoredCoords(pubId) {
-      const raw = localStorage.getItem(`pubcoords_${pubId}`);
-      if (!raw) return null;
-
-      try {
-        const parsed = JSON.parse(raw);
-        if (
-          typeof parsed.lat === "number" &&
-          typeof parsed.lng === "number" &&
-          !Number.isNaN(parsed.lat) &&
-          !Number.isNaN(parsed.lng)
-        ) {
-          return parsed;
-        }
-      } catch (error) {}
-
-      return null;
+  marker.on("click",()=>{
+    if(!unlocked.includes(s.id)){
+      unlocked.push(s.id);
+      localStorage.setItem("signals",JSON.stringify(unlocked));
+      updateUI();
     }
+  });
+});
 
-    function hasCoordinates(pub) {
-      return (
-        typeof pub.lat === "number" &&
-        typeof pub.lng === "number" &&
-        !Number.isNaN(pub.lat) &&
-        !Number.isNaN(pub.lng)
-      );
-    }
+function updateUI(){
+  let percent = (unlocked.length / signals.length)*100;
+  document.getElementById("progressFill").style.width = percent+"%";
+  document.getElementById("progressText").innerText =
+    unlocked.length+" / "+signals.length+" Signals Active";
+}
 
-    function getResolvedPubs() {
-      return westminsterPubs.map(pub => {
-        if (hasCoordinates(pub)) return pub;
+updateUI();
 
-        const stored = getStoredCoords(pub.id);
-        if (stored) {
-          return {
-            ...pub,
-            lat: stored.lat,
-            lng: stored.lng
-          };
-        }
+function centerOnUser(){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    map.setView([pos.coords.latitude,pos.coords.longitude],16);
+  });
+}
+</script>
 
-        return pub;
-      });
-    }
-
-    function signalIcon(unlocked, districtId) {
-      const district = getDistrictById(districtId);
-
-      return L.divIcon({
-        html: `
-          <div class="signal-marker ${unlocked ? "signal-unlocked" : "signal-locked"}" style="--signal-color:${district ? district.color : "#d4a24c"};">
-            <div class="signal-core">📡</div>
-            <div class="signal-ring signal-ring-1"></div>
-            <div class="signal-ring signal-ring-2"></div>
-          </div>
-        `,
-        className: "signal-marker-wrap",
-        iconSize: [54, 54],
-        iconAnchor: [27, 27]
-      });
-    }
-
-    function pubIcon() {
-      return L.divIcon({
-        html: `<div class="pint-marker-ac">🍺</div>`,
-        className: "pint-marker-wrap",
-        iconSize: [34, 34],
-        iconAnchor: [17, 24]
-      });
-    }
-
-    function clearLayers(list) {
-      list.forEach(layer => map.removeLayer(layer));
-      list.length = 0;
-    }
-
-    function renderDistrictLabels() {
-      clearLayers(districtLabels);
-
-      districts.forEach(district => {
-        const label = L.marker([district.centerLat, district.centerLng], {
-          interactive: false,
-          icon: L.divIcon({
-            html: `<div class="district-label">${district.name}</div>`,
-            className: "district-label-wrap",
-            iconSize: [180, 28],
-            iconAnchor: [90, 14]
-          })
-        }).addTo(map);
-
-        districtLabels.push(label);
-      });
-    }
-
-    function renderSignals() {
-      clearLayers(signalMarkers);
-      clearLayers(signalRevealCircles);
-      clearLayers(signalGlowCircles);
-
-      signals.forEach(signal => {
-        const unlocked = unlockedSignals.has(signal.id);
-        const district = getDistrictById(signal.districtId);
-
-        if (unlocked) {
-          const glow = L.circle([signal.lat, signal.lng], {
-            radius: SIGNAL_RADIUS * 1.22,
-            stroke: false,
-            fillColor: district ? district.color : "#ffd27a",
-            fillOpacity: 0.05,
-            interactive: false
-          }).addTo(map);
-
-          const reveal = L.circle([signal.lat, signal.lng], {
-            radius: SIGNAL_RADIUS,
-            color: district ? district.color : "#ffcc73",
-            weight: 1,
-            fillColor: district ? district.color : "#ffcc73",
-            fillOpacity: 0.12,
-            interactive: false
-          }).addTo(map);
-
-          signalGlowCircles.push(glow);
-          signalRevealCircles.push(reveal);
-        }
-
-        const marker = L.marker([signal.lat, signal.lng], {
-          icon: signalIcon(unlocked, signal.districtId)
-        }).addTo(map);
-
-        marker.bindPopup(`
-          <div style="min-width: 190px;">
-            <strong>${signal.name}</strong><br>
-            ${district ? district.name : "District"}<br>
-            ${unlocked ? "Unlocked ✓" : "Locked"}<br>
-            ${unlocked ? "District online." : "Move within 50m to unlock."}
-          </div>
-        `);
-
-        marker.on("click", () => unlockSignal(signal));
-        signalMarkers.push(marker);
-      });
-    }
-
-    function isPubVisible(pub) {
-      return signals.some(signal => {
-        if (!unlockedSignals.has(signal.id)) return false;
-        const distance = map.distance([pub.lat, pub.lng], [signal.lat, signal.lng]);
-        return distance <= SIGNAL_RADIUS;
-      });
-    }
-
-    function renderPubs() {
-      clearLayers(pubMarkers);
-
-      const pubs = getResolvedPubs();
-      const visiblePubs = pubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
-
-      visiblePubs.forEach(pub => {
-        const marker = L.marker([pub.lat, pub.lng], {
-          icon: pubIcon()
-        }).addTo(map);
-
-        const districtId = getDistrictForPub(pub);
-        const district = getDistrictById(districtId);
-
-        marker.bindPopup(`
-          <div style="min-width: 190px;">
-            <strong>${pub.name}</strong><br>
-            ${district ? district.name : "District unknown"}<br>
-            ${pub.address || ""}<br>
-            Click to open pub page.
-          </div>
-        `);
-
-        marker.on("click", () => {
-          window.location.href = `pub.html?id=${encodeURIComponent(pub.id)}`;
-        });
-
-        pubMarkers.push(marker);
-      });
-    }
-
-    function getDistrictStats() {
-      const pubs = getResolvedPubs();
-
-      return districts.map(district => {
-        const districtSignals = signals.filter(signal => signal.districtId === district.id);
-        const districtPubs = pubs.filter(pub => getDistrictForPub(pub) === district.id);
-        const visiblePubs = districtPubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
-        const unlockedCount = districtSignals.filter(signal => unlockedSignals.has(signal.id)).length;
-
-        return {
-          district,
-          totalSignals: districtSignals.length,
-          unlockedSignals: unlockedCount,
-          totalPubs: districtPubs.length,
-          visiblePubs: visiblePubs.length,
-          online: unlockedCount > 0
-        };
-      });
-    }
-
-    function renderDistrictCard() {
-      const stats = getDistrictStats();
-
-      districtCardEl.innerHTML = `
-        <div class="hero-badge">District Layer</div>
-        <div class="hero-title">${stats.filter(item => item.online).length} / ${districts.length} districts online</div>
-        <div class="stack-meta">Signals unlock districts. Districts contain pubs.</div>
-
-        <div class="district-list">
-          ${stats.map(item => `
-            <div class="district-row">
-              <div class="district-row-top">
-                <div class="district-name-wrap">
-                  <span class="district-dot" style="background:${item.district.color};"></span>
-                  <strong>${item.district.name}</strong>
-                </div>
-                <span class="district-status ${item.online ? "district-online" : "district-offline"}">
-                  ${item.online ? "Online" : "Locked"}
-                </span>
-              </div>
-
-              <div class="district-meta">
-                Signals: ${item.unlockedSignals}/${item.totalSignals} · Visible pubs: ${item.visiblePubs}/${item.totalPubs}
-              </div>
-
-              <div class="district-progress-bar">
-                <div
-                  class="district-progress-fill"
-                  style="width:${item.totalPubs ? (item.visiblePubs / item.totalPubs) * 100 : 0}%; background:${item.district.color};"
-                ></div>
-              </div>
-            </div>
-          `).join("")}
-        </div>
-      `;
-    }
-
-    function renderAll() {
-      renderDistrictLabels();
-      renderSignals();
-      renderPubs();
-      renderDistrictCard();
-    }
-
-    function status(message) {
-      mapStatusEl.textContent = message;
-    }
-
-    function unlockSignal(signal) {
-      if (!userPos) {
-        status("Enable location to activate Signals.");
-        return;
-      }
-
-      const dist = map.distance(userPos, [signal.lat, signal.lng]);
-
-      if (dist > UNLOCK_DISTANCE) {
-        status(`${signal.name} is ${Math.round(dist)}m away.`);
-        return;
-      }
-
-      if (!unlockedSignals.has(signal.id)) {
-        unlockedSignals.add(signal.id);
-        localStorage.setItem("signals", JSON.stringify([...unlockedSignals]));
-
-        const district = getDistrictById(signal.districtId);
-        status(`${signal.name} unlocked. ${district ? district.name : "District"} is now online.`);
-
-        renderAll();
-      } else {
-        status(`${signal.name} is already online.`);
-      }
-    }
-
-    navigator.geolocation.watchPosition(
-      pos => {
-        userPos = [pos.coords.latitude, pos.coords.longitude];
-
-        if (!userMarker) {
-          userMarker = L.marker(userPos).addTo(map).bindPopup("You are here");
-        } else {
-          userMarker.setLatLng(userPos);
-        }
-      },
-      () => {
-        status("Location unavailable. Signals require location access.");
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 10000
-      }
-    );
-
-    function centerOnUser() {
-      if (userPos) {
-        map.setView(userPos, 16);
-      }
-    }
-
-    window.centerOnUser = centerOnUser;
-
-    renderAll();
-  </script>
 </body>
 </html>
