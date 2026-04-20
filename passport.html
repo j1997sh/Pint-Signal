@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <div class="brand-title">Pub Passport</div>
-        <div class="brand-subtitle">District progress across Westminster</div>
+        <div class="brand-subtitle">Your Westminster collection</div>
       </div>
 
       <nav class="menu">
@@ -22,56 +22,97 @@
     </div>
   </header>
 
-  <div class="page page-narrow">
-    <div class="card">
-      <div class="panel-title">Exploration</div>
-      <div class="big-number" id="passportPercent">0%</div>
+  <main class="page passport-page">
+    <section class="passport-hero card">
+      <div class="passport-hero-top">
+        <div>
+          <div class="hud-kicker">Explorer Profile</div>
+          <div class="passport-title">Westminster Survey Passport</div>
+          <div class="passport-subtitle">Track districts, rare pubs, and your discovery rank.</div>
+        </div>
+        <div class="passport-rank-chip" id="rankChip">Scout</div>
+      </div>
 
-      <div class="progress-bar">
+      <div class="passport-hero-grid">
+        <div class="passport-hero-stat">
+          <span>Explored</span>
+          <strong id="passportPercent">0%</strong>
+        </div>
+        <div class="passport-hero-stat">
+          <span>Signals online</span>
+          <strong id="signalCount">0</strong>
+        </div>
+        <div class="passport-hero-stat">
+          <span>Pubs discovered</span>
+          <strong id="visitedCount">0</strong>
+        </div>
+        <div class="passport-hero-stat">
+          <span>XP</span>
+          <strong id="xpCount">0</strong>
+        </div>
+      </div>
+
+      <div class="progress-bar passport-main-progress">
         <div class="progress-fill" id="passportBar" style="width:0%"></div>
       </div>
+    </section>
 
-      <div class="stat-row">
-        <div class="stat">
-          <strong id="visitedCount">0</strong>
-          <span>Visited pubs</span>
-        </div>
-        <div class="stat">
-          <strong id="signalCount">0</strong>
-          <span>Signals online</span>
-        </div>
-        <div class="stat">
-          <strong id="xpCount">0</strong>
-          <span>XP</span>
+    <section class="card">
+      <div class="section-title-row">
+        <div>
+          <div class="panel-title">District Collection</div>
+          <div class="panel-sub">Clear districts, unlock rewards, and chase missing targets.</div>
         </div>
       </div>
-    </div>
+      <div id="districtProgressList" class="passport-district-list"></div>
+    </section>
 
-    <div class="card">
-      <div class="panel-title">District Completion</div>
-      <div id="districtProgressList"></div>
-    </div>
+    <section class="card">
+      <div class="section-title-row">
+        <div>
+          <div class="panel-title">Rarity Collection</div>
+          <div class="panel-sub">Your discovered pub tiers across the city.</div>
+        </div>
+      </div>
 
-    <div class="card">
-      <div class="panel-title">All Stampable Pubs</div>
-      <div class="panel-sub">Jump straight to any pub in the live dataset</div>
+      <div class="rarity-grid">
+        <div class="rarity-card rarity-common">
+          <span>Common</span>
+          <strong id="commonCount">0</strong>
+        </div>
+        <div class="rarity-card rarity-notable">
+          <span>Notable</span>
+          <strong id="notableCount">0</strong>
+        </div>
+        <div class="rarity-card rarity-rare">
+          <span>Rare</span>
+          <strong id="rareCount">0</strong>
+        </div>
+        <div class="rarity-card rarity-legendary">
+          <span>Legendary</span>
+          <strong id="legendaryCount">0</strong>
+        </div>
+      </div>
+    </section>
 
-      <div style="margin-top:12px;">
+    <section class="card">
+      <div class="section-title-row">
+        <div>
+          <div class="panel-title">Stamp Book</div>
+          <div class="panel-sub">Browse your collection or jump to any pub.</div>
+        </div>
+      </div>
+
+      <div class="passport-controls">
         <select id="pubSelect" class="passport-select">
           <option value="">Choose a pub...</option>
         </select>
-      </div>
-
-      <div style="margin-top:12px;">
         <button id="openPubButton">Open Pub Page</button>
       </div>
-    </div>
 
-    <div class="card">
-      <div class="panel-title">Visited Pubs</div>
-      <div id="visitedPubList"></div>
-    </div>
-  </div>
+      <div id="visitedPubList" class="stamp-book-list"></div>
+    </section>
+  </main>
 
   <script type="module">
     import { westminsterPubs } from "./westminster-pubs.js";
@@ -145,8 +186,12 @@
       return rareAssignments[pub.id] || "common";
     }
 
-    function getDistrictPubs(pubs, districtId) {
-      return pubs.filter(pub => getDistrictForPub(pub) === districtId);
+    function getRankFromXp(value) {
+      if (value >= 1000) return "Master Surveyor";
+      if (value >= 600) return "Cartographer";
+      if (value >= 250) return "Pathfinder";
+      if (value >= 100) return "Scout";
+      return "Newcomer";
     }
 
     const pubs = getResolvedPubs();
@@ -157,10 +202,15 @@
     const visitedCountEl = document.getElementById("visitedCount");
     const signalCountEl = document.getElementById("signalCount");
     const xpCountEl = document.getElementById("xpCount");
+    const rankChipEl = document.getElementById("rankChip");
     const districtProgressListEl = document.getElementById("districtProgressList");
     const visitedPubListEl = document.getElementById("visitedPubList");
     const pubSelectEl = document.getElementById("pubSelect");
     const openPubButtonEl = document.getElementById("openPubButton");
+    const commonCountEl = document.getElementById("commonCount");
+    const notableCountEl = document.getElementById("notableCount");
+    const rareCountEl = document.getElementById("rareCount");
+    const legendaryCountEl = document.getElementById("legendaryCount");
 
     function renderOverview() {
       const percent = pubs.length ? (visitedPubRecords.length / pubs.length) * 100 : 0;
@@ -170,18 +220,25 @@
       visitedCountEl.textContent = String(visitedPubRecords.length);
       signalCountEl.textContent = String(unlockedSignals.size);
       xpCountEl.textContent = String(xp);
+      rankChipEl.textContent = getRankFromXp(xp);
     }
 
     function renderDistrictProgress() {
       districtProgressListEl.innerHTML = districts.map(district => {
         const districtSignals = signals.filter(signal => signal.districtId === district.id);
-        const districtPubs = getDistrictPubs(pubs, district.id);
+        const districtPubs = pubs.filter(pub => getDistrictForPub(pub) === district.id);
         const districtVisited = districtPubs.filter(pub => visitedPubs.has(pub.id));
         const unlockedCount = districtSignals.filter(signal => unlockedSignals.has(signal.id)).length;
         const percent = districtPubs.length ? (districtVisited.length / districtPubs.length) * 100 : 0;
+        const bestMissing = districtPubs
+          .filter(pub => !visitedPubs.has(pub.id))
+          .sort((a, b) => {
+            const rarityOrder = { common: 1, notable: 2, rare: 3, legendary: 4 };
+            return rarityOrder[getPubRarity(b)] - rarityOrder[getPubRarity(a)];
+          })[0];
 
         return `
-          <div class="district-row">
+          <div class="passport-district-card">
             <div class="district-row-top">
               <div class="district-name-wrap">
                 <span class="district-dot" style="background:${district.color};"></span>
@@ -207,9 +264,32 @@
                 </span>
               `).join("")}
             </div>
+
+            <div class="passport-district-footer">
+              <span>Next best target</span>
+              <strong>${bestMissing ? `${bestMissing.name} (${getPubRarity(bestMissing)})` : "District cleared"}</strong>
+            </div>
           </div>
         `;
       }).join("");
+    }
+
+    function renderRarityCollection() {
+      const counts = {
+        common: 0,
+        notable: 0,
+        rare: 0,
+        legendary: 0
+      };
+
+      visitedPubRecords.forEach(pub => {
+        counts[getPubRarity(pub)] += 1;
+      });
+
+      commonCountEl.textContent = String(counts.common);
+      notableCountEl.textContent = String(counts.notable);
+      rareCountEl.textContent = String(counts.rare);
+      legendaryCountEl.textContent = String(counts.legendary);
     }
 
     function renderPubSelect() {
@@ -234,12 +314,18 @@
 
       visitedPubListEl.innerHTML = sorted.map(pub => {
         const rarity = getPubRarity(pub);
+        const district = districts.find(d => d.id === getDistrictForPub(pub));
 
         return `
-          <button class="stack-card pub-list-card" onclick="window.location.href='pub.html?id=${encodeURIComponent(pub.id)}'">
-            <div class="stack-title">${pub.name}</div>
-            <div class="stack-meta">${pub.address || ""}</div>
-            <div class="stack-meta">Rarity: ${rarity}</div>
+          <button class="stamp-card" onclick="window.location.href='pub.html?id=${encodeURIComponent(pub.id)}'">
+            <div class="stamp-card-top">
+              <div>
+                <div class="stamp-title">${pub.name}</div>
+                <div class="stamp-meta">${district ? district.name : "District unknown"}</div>
+              </div>
+              <div class="stamp-rarity rarity-${rarity}">${rarity}</div>
+            </div>
+            <div class="stamp-address">${pub.address || ""}</div>
           </button>
         `;
       }).join("");
@@ -255,6 +341,7 @@
 
     renderOverview();
     renderDistrictProgress();
+    renderRarityCollection();
     renderPubSelect();
     renderVisitedPubs();
   </script>
