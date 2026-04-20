@@ -12,6 +12,51 @@
 
   <ul id="pubList"></ul>
 
-  <script src="app.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+      authDomain: "pintsignal.firebaseapp.com",
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const pubList = document.getElementById("pubList");
+
+    await signInAnonymously(auth);
+
+    async function loadPubs() {
+      pubList.innerHTML = "";
+
+      const snapshot = await getDocs(collection(db, "pubs"));
+
+      snapshot.forEach(doc => {
+        const li = document.createElement("li");
+        li.textContent = doc.data().name;
+        pubList.appendChild(li);
+      });
+    }
+
+    async function addPub() {
+      await addDoc(collection(db, "pubs"), {
+        name: "Test Pub " + Math.floor(Math.random() * 100)
+      });
+
+      loadPubs();
+    }
+
+    window.addPub = addPub;
+
+    loadPubs();
+  </script>
 </body>
 </html>
