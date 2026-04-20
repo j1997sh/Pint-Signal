@@ -1,79 +1,537 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Pub</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pint Signal Pub</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal 🍺</div>
+        <div class="brand-subtitle">Pub details</div>
+      </div>
 
-<header class="topbar">
-  <a href="index.html">← Back</a>
-</header>
+      <nav class="menu">
+        <a href="index.html">Home</a>
+        <a href="activity.html">Activity</a>
+      </nav>
+    </div>
+  </header>
 
-<main class="page">
+  <main class="page page-narrow">
+    <section class="place-hero">
+      <a href="index.html" class="back-link">← Back to map</a>
 
-<div id="pub"></div>
+      <div id="pubHeroCard" class="place-card loading-card">
+        Loading pub...
+      </div>
+    </section>
 
-<h3>Submit Price</h3>
-<input id="drink" placeholder="Drink">
-<input id="price" placeholder="Price">
-<button onclick="submit()">Submit</button>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Actions</h2>
+        <p>Check in or submit a pint price when you are nearby</p>
+      </div>
 
-<h3>History</h3>
-<div id="history"></div>
+      <div class="action-grid">
+        <div class="info-card">
+          <div class="mini-card-title">Check In</div>
+          <div class="mini-card-text" id="checkinHint">Loading location status...</div>
+          <div class="controls-row">
+            <button onclick="checkIn()">Check In Here</button>
+          </div>
+        </div>
 
-</main>
+        <div class="info-card">
+          <div class="mini-card-title">Quick Links</div>
+          <div class="mini-card-text" id="routeHint">Open directions or center around this pub</div>
+          <div class="controls-row">
+            <button onclick="openDirections()">Open Directions</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, addDoc, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Submit Pint Price</h2>
+        <p>Add the latest price you see at this pub</p>
+      </div>
 
-const firebaseConfig = {
-  apiKey: "YOUR KEY",
-  authDomain: "pintsignal.firebaseapp.com",
-  projectId: "pintsignal"
-};
+      <div class="info-card">
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Drink name</span>
+            <input id="drink" type="text" placeholder="e.g. Guinness" />
+          </label>
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+          <label class="form-field">
+            <span>Price (£)</span>
+            <input id="price" type="number" step="0.01" min="0" placeholder="e.g. 6.80" />
+          </label>
 
-const params = new URLSearchParams(window.location.search);
-const id = params.get("id");
+          <label class="form-field full-width">
+            <span>Optional note</span>
+            <input id="note" type="text" placeholder="e.g. Pint of Madri" />
+          </label>
+        </div>
 
-async function load(){
-  const d = await getDoc(doc(db,"pubs",id));
-  const p = d.data();
+        <div class="controls-row">
+          <button onclick="submitPrice()">Submit Pint Price</button>
+        </div>
+      </div>
+    </section>
 
-  document.getElementById("pub").innerHTML = `
-    <h2>${p.name}</h2>
-    ${p.area}
-  `;
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Latest Pint Price</h2>
+        <p>Most recent submission for this pub</p>
+      </div>
 
-  const q = query(collection(db,"prices"),where("pubId","==",id),orderBy("createdAtMs","desc"));
-  const s = await getDocs(q);
+      <div id="latestPriceCard" class="info-card empty-state">
+        No price submitted yet.
+      </div>
+    </section>
 
-  s.forEach(doc=>{
-    const d = doc.data();
-    const div = document.createElement("div");
-    div.className="card";
-    div.innerHTML=`${d.drinkName} £${d.price}`;
-    document.getElementById("history").appendChild(div);
-  });
-}
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Pint History</h2>
+        <p>Recent submissions for this pub</p>
+      </div>
 
-window.submit = async ()=>{
-  await addDoc(collection(db,"prices"),{
-    pubId:id,
-    drinkName:document.getElementById("drink").value,
-    price:Number(document.getElementById("price").value),
-    createdAtMs:Date.now()
-  });
-  location.reload();
-}
+      <div id="history" class="stack-list"></div>
+    </section>
+  </main>
 
-load();
-</script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      collection,
+      addDoc,
+      query,
+      where,
+      orderBy,
+      getDocs,
+      limit
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    import {
+      getAuth,
+      signInAnonymously
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
+    const firebaseConfig = {
+      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+      authDomain: "pintsignal.firebaseapp.com",
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+    };
+
+    const CHECKIN_RADIUS_METERS = 50;
+    const CHECKIN_COOLDOWN_MINUTES = 60;
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const params = new URLSearchParams(window.location.search);
+    const pubId = params.get("id");
+
+    const pubHeroCardEl = document.getElementById("pubHeroCard");
+    const latestPriceCardEl = document.getElementById("latestPriceCard");
+    const historyEl = document.getElementById("history");
+    const checkinHintEl = document.getElementById("checkinHint");
+
+    let currentUser = null;
+    let pub = null;
+    let userLatLng = null;
+
+    function toRadians(value) {
+      return (value * Math.PI) / 180;
+    }
+
+    function distanceInMeters(lat1, lng1, lat2, lng2) {
+      const earthRadius = 6371000;
+      const dLat = toRadians(lat2 - lat1);
+      const dLng = toRadians(lng2 - lng1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRadians(lat1)) *
+          Math.cos(toRadians(lat2)) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(earthRadius * c);
+    }
+
+    function formatDistance(meters) {
+      if (meters < 1000) return `${meters}m away`;
+      return `${(meters / 1000).toFixed(2)}km away`;
+    }
+
+    function formatPrice(value) {
+      const numberValue = Number(value);
+      if (Number.isNaN(numberValue)) return "£0.00";
+      return `£${numberValue.toFixed(2)}`;
+    }
+
+    function formatTimeAgo(timestampMs) {
+      const diffMs = Date.now() - timestampMs;
+      const diffMinutes = Math.floor(diffMs / 60000);
+
+      if (diffMinutes < 1) return "just now";
+      if (diffMinutes === 1) return "1 minute ago";
+      if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours === 1) return "1 hour ago";
+      if (diffHours < 24) return `${diffHours} hours ago`;
+
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return "1 day ago";
+      return `${diffDays} days ago`;
+    }
+
+    function getDistanceToPub() {
+      if (!pub || !userLatLng) return null;
+      return distanceInMeters(userLatLng.lat, userLatLng.lng, pub.lat, pub.lng);
+    }
+
+    function renderCheckinHint() {
+      if (!pub) {
+        checkinHintEl.textContent = "Loading pub...";
+        return;
+      }
+
+      const distance = getDistanceToPub();
+
+      if (!userLatLng) {
+        checkinHintEl.textContent = "Allow location to check in or submit a price.";
+        return;
+      }
+
+      if (distance <= CHECKIN_RADIUS_METERS) {
+        checkinHintEl.textContent = `${formatDistance(distance)} • You can check in and submit a price now.`;
+      } else {
+        checkinHintEl.textContent = `${formatDistance(distance)} • Move within ${CHECKIN_RADIUS_METERS}m to check in.`;
+      }
+    }
+
+    async function loadPub() {
+      if (!pubId) {
+        pubHeroCardEl.innerHTML = `<div class="empty-state">No pub selected.</div>`;
+        return;
+      }
+
+      const snapshot = await getDoc(doc(db, "pubs", pubId));
+
+      if (!snapshot.exists()) {
+        pubHeroCardEl.innerHTML = `<div class="empty-state">Pub not found.</div>`;
+        return;
+      }
+
+      const data = snapshot.data();
+
+      pub = {
+        id: snapshot.id,
+        name: data.name,
+        area: data.area || "Westminster",
+        lat: Number(data.lat),
+        lng: Number(data.lng),
+        tags: Array.isArray(data.tags) ? data.tags : []
+      };
+
+      renderPubHero();
+      renderCheckinHint();
+    }
+
+    function renderPubHero() {
+      const distance = getDistanceToPub();
+
+      pubHeroCardEl.className = "place-card";
+      pubHeroCardEl.innerHTML = `
+        <div class="place-card-top">
+          <div class="place-emoji">🍺</div>
+          <div class="place-head">
+            <div class="place-title">${pub.name}</div>
+            <div class="place-subtitle">${pub.area}</div>
+          </div>
+        </div>
+
+        <div class="place-chip-row">
+          ${(pub.tags || []).map(tag => `<span class="place-chip">${tag}</span>`).join("")}
+        </div>
+
+        <div class="place-stats">
+          <div class="place-stat">
+            <div class="place-stat-label">Distance</div>
+            <div class="place-stat-value">${distance === null ? "Location off" : formatDistance(distance)}</div>
+          </div>
+          <div class="place-stat">
+            <div class="place-stat-label">Check-in radius</div>
+            <div class="place-stat-value">${CHECKIN_RADIUS_METERS}m</div>
+          </div>
+          <div class="place-stat">
+            <div class="place-stat-label">Coordinates</div>
+            <div class="place-stat-value">${pub.lat.toFixed(4)}, ${pub.lng.toFixed(4)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadLatestPrice() {
+      const q = query(
+        collection(db, "prices"),
+        where("pubId", "==", pubId),
+        orderBy("createdAtMs", "desc"),
+        limit(1)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        latestPriceCardEl.className = "info-card empty-state";
+        latestPriceCardEl.innerHTML = "No price submitted yet.";
+        return;
+      }
+
+      const latest = snapshot.docs[0].data();
+
+      latestPriceCardEl.className = "info-card";
+      latestPriceCardEl.innerHTML = `
+        <div class="hero-badge">Latest</div>
+        <div class="hero-title">${latest.drinkName}</div>
+        <div class="hero-price">${formatPrice(latest.price)}</div>
+        <div class="stack-meta">${latest.note ? latest.note + " • " : ""}${formatTimeAgo(latest.createdAtMs)}</div>
+      `;
+    }
+
+    async function loadHistory() {
+      historyEl.innerHTML = "";
+
+      const q = query(
+        collection(db, "prices"),
+        where("pubId", "==", pubId),
+        orderBy("createdAtMs", "desc"),
+        limit(20)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        historyEl.innerHTML = `<div class="empty-state">No price history yet.</div>`;
+        return;
+      }
+
+      snapshot.forEach(doc => {
+        const entry = doc.data();
+
+        const card = document.createElement("div");
+        card.className = "stack-card";
+        card.innerHTML = `
+          <div class="stack-title">${entry.drinkName} • ${formatPrice(entry.price)}</div>
+          <div class="stack-meta">${entry.note ? entry.note + " • " : ""}${formatTimeAgo(entry.createdAtMs)}</div>
+        `;
+
+        historyEl.appendChild(card);
+      });
+    }
+
+    async function getLatestCheckinForPub(pubIdValue, userIdValue) {
+      const q = query(
+        collection(db, "checkins"),
+        where("pubId", "==", pubIdValue),
+        where("userId", "==", userIdValue)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        return null;
+      }
+
+      let latest = null;
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (!latest || (data.createdAtMs || 0) > (latest.createdAtMs || 0)) {
+          latest = data;
+        }
+      });
+
+      return latest;
+    }
+
+    async function checkIn() {
+      if (!pub) {
+        alert("Pub not loaded yet.");
+        return;
+      }
+
+      if (!currentUser) {
+        alert("User not ready yet.");
+        return;
+      }
+
+      if (!userLatLng) {
+        alert("Allow location first.");
+        return;
+      }
+
+      const distance = getDistanceToPub();
+
+      if (distance === null || distance > CHECKIN_RADIUS_METERS) {
+        alert(`You must be within ${CHECKIN_RADIUS_METERS}m to check in.`);
+        return;
+      }
+
+      const latestCheckin = await getLatestCheckinForPub(pub.id, currentUser.uid);
+
+      if (latestCheckin) {
+        const minutesSinceLastCheckin = Math.floor((Date.now() - latestCheckin.createdAtMs) / 60000);
+
+        if (minutesSinceLastCheckin < CHECKIN_COOLDOWN_MINUTES) {
+          const minutesLeft = CHECKIN_COOLDOWN_MINUTES - minutesSinceLastCheckin;
+          alert(`Cooldown active. Try again in ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}.`);
+          return;
+        }
+      }
+
+      await addDoc(collection(db, "checkins"), {
+        pubId: pub.id,
+        pubName: pub.name,
+        userId: currentUser.uid,
+        userLat: userLatLng.lat,
+        userLng: userLatLng.lng,
+        createdAtMs: Date.now(),
+        createdAtIso: new Date().toISOString()
+      });
+
+      alert(`Checked in at ${pub.name}`);
+    }
+
+    async function submitPrice() {
+      if (!pub) {
+        alert("Pub not loaded yet.");
+        return;
+      }
+
+      if (!currentUser) {
+        alert("User not ready yet.");
+        return;
+      }
+
+      if (!userLatLng) {
+        alert("Allow location first.");
+        return;
+      }
+
+      const distance = getDistanceToPub();
+
+      if (distance === null || distance > CHECKIN_RADIUS_METERS) {
+        alert(`You must be within ${CHECKIN_RADIUS_METERS}m to submit a price.`);
+        return;
+      }
+
+      const drinkInput = document.getElementById("drink");
+      const priceInput = document.getElementById("price");
+      const noteInput = document.getElementById("note");
+
+      const drinkName = drinkInput.value.trim();
+      const price = Number(priceInput.value);
+      const note = noteInput.value.trim();
+
+      if (!drinkName) {
+        alert("Enter a drink name.");
+        return;
+      }
+
+      if (Number.isNaN(price) || price <= 0) {
+        alert("Enter a valid price.");
+        return;
+      }
+
+      await addDoc(collection(db, "prices"), {
+        pubId: pub.id,
+        pubName: pub.name,
+        userId: currentUser.uid,
+        drinkName,
+        price,
+        note,
+        createdAtMs: Date.now(),
+        createdAtIso: new Date().toISOString(),
+        userLat: userLatLng.lat,
+        userLng: userLatLng.lng
+      });
+
+      drinkInput.value = "";
+      priceInput.value = "";
+      noteInput.value = "";
+
+      await loadLatestPrice();
+      await loadHistory();
+      alert(`Submitted ${drinkName} at ${formatPrice(price)}`);
+    }
+
+    function openDirections() {
+      if (!pub) return;
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${pub.lat},${pub.lng}`;
+      window.open(url, "_blank");
+    }
+
+    function startLocation() {
+      if (!("geolocation" in navigator)) {
+        renderCheckinHint();
+        return;
+      }
+
+      navigator.geolocation.watchPosition(
+        position => {
+          userLatLng = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+
+          if (pub) {
+            renderPubHero();
+            renderCheckinHint();
+          }
+        },
+        () => {
+          renderCheckinHint();
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 10000,
+          timeout: 10000
+        }
+      );
+    }
+
+    async function start() {
+      const authResult = await signInAnonymously(auth);
+      currentUser = authResult.user;
+
+      await loadPub();
+      await loadLatestPrice();
+      await loadHistory();
+      startLocation();
+    }
+
+    window.submitPrice = submitPrice;
+    window.checkIn = checkIn;
+    window.openDirections = openDirections;
+
+    start();
+  </script>
 </body>
 </html>
