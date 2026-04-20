@@ -7,392 +7,236 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div>
-        <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Pub passport</div>
-      </div>
 
-      <nav class="menu">
-        <a href="index.html">Home</a>
-        <a href="passport.html">Passport</a>
-        <a href="activity.html">Activity</a>
-        <a href="leaderboard.html">Leaderboard</a>
-        <a href="add-pub.html">Add a Pub</a>
-      </nav>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <div class="brand-title">Pint Signal 🍺</div>
+      <div class="brand-subtitle">Your pub passport</div>
     </div>
-  </header>
 
-  <main class="page">
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Your Totals</h2>
-        <p>Your own pub passport totals and money breakdown</p>
+    <nav class="menu">
+      <a href="index.html">Home</a>
+      <a href="passport.html">Passport</a>
+      <a href="activity.html">Activity</a>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="add-pub.html">Add a Pub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- HERO -->
+  <section class="panel passport-summary-card">
+    <div id="passportHero"></div>
+  </section>
+
+  <!-- TOTALS -->
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Your Totals</h2>
+      <p>Your personal contribution and spend</p>
+    </div>
+    <div id="personalTotals"></div>
+  </section>
+
+  <!-- BADGES -->
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Badges</h2>
+      <p>Unlock progress by exploring and submitting prices</p>
+    </div>
+    <div id="badgeRow" class="badge-row"></div>
+  </section>
+
+  <!-- VISITED -->
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Visited</h2>
+    </div>
+    <div id="visitedPubs" class="passport-grid"></div>
+  </section>
+
+  <!-- UNVISITED -->
+  <section class="panel">
+    <div class="panel-header">
+      <h2>To Visit</h2>
+    </div>
+    <div id="unvisitedPubs" class="passport-grid"></div>
+  </section>
+
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import {
+  getAuth,
+  signInAnonymously
+} from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+  authDomain: "pintsignal.firebaseapp.com",
+  projectId: "pintsignal",
+  storageBucket: "pintsignal.firebasestorage.app",
+  messagingSenderId: "63376472196",
+  appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+const heroEl = document.getElementById("passportHero");
+const totalsEl = document.getElementById("personalTotals");
+const badgeRowEl = document.getElementById("badgeRow");
+const visitedEl = document.getElementById("visitedPubs");
+const unvisitedEl = document.getElementById("unvisitedPubs");
+
+function formatMoney(v) {
+  return `£${Number(v).toFixed(2)}`;
+}
+
+function calc(price) {
+  const vat = price * 0.20;
+  const duty = 0.60;
+  const beer = 1.50;
+  const overheads = 3.00;
+
+  return {
+    vat,
+    duty,
+    beer,
+    overheads,
+    gov: vat + duty,
+    pub: price - vat - duty - beer - overheads
+  };
+}
+
+function tier(xp) {
+  if (xp >= 300) return "🏆 Legend";
+  if (xp >= 150) return "🍺 Regular";
+  if (xp >= 75) return "🧭 Explorer";
+  return "✨ New Scout";
+}
+
+function stamp(pub, visited) {
+  const el = document.createElement("button");
+  el.className = `passport-stamp ${visited ? "visited" : ""}`;
+
+  el.innerHTML = `
+    <div class="stamp-emoji">${visited ? "🍺" : "📍"}</div>
+    <div class="stamp-title">${pub.name}</div>
+  `;
+
+  el.onclick = () => {
+    window.location.href = `pub.html?id=${pub.id}`;
+  };
+
+  return el;
+}
+
+async function load() {
+  const user = await signInAnonymously(auth);
+  const uid = user.user.uid;
+
+  const pubsSnap = await getDocs(collection(db, "pubs"));
+  const pricesSnap = await getDocs(collection(db, "prices"));
+  const checkSnap = await getDocs(collection(db, "checkins"));
+
+  const visited = new Set();
+
+  let totalSpent = 0;
+  let totalGov = 0;
+  let totalPub = 0;
+  let priceCount = 0;
+
+  checkSnap.forEach(doc => {
+    const d = doc.data();
+    if (d.userId === uid) visited.add(d.pubId);
+  });
+
+  pricesSnap.forEach(doc => {
+    const d = doc.data();
+    if (d.userId === uid) {
+      const price = Number(d.price || 0);
+      const e = calc(price);
+
+      totalSpent += price;
+      totalGov += e.gov;
+      totalPub += e.pub;
+      priceCount++;
+    }
+  });
+
+  const pubs = [];
+  pubsSnap.forEach(doc => pubs.push({ id: doc.id, ...doc.data() }));
+
+  const visitedCount = visited.size;
+  const xp = visitedCount * 10 + priceCount * 15;
+
+  // HERO
+  heroEl.innerHTML = `
+    <div class="passport-hero-row">
+      <div>
+        <div class="hero-badge">${tier(xp)}</div>
+        <div class="hero-title">${visitedCount} pubs visited</div>
+        <div class="stack-meta">${priceCount} prices logged</div>
       </div>
-      <div id="personalTotals" class="passport-summary-card">Loading totals...</div>
-    </section>
+      <div class="passport-xp-pill">${xp} XP</div>
+    </div>
+  `;
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Passport Summary</h2>
-        <p>Your visited pubs, progress, and badge tier</p>
+  // TOTALS
+  totalsEl.innerHTML = `
+    <div class="stats-row">
+      <div class="mini-stat">
+        <div class="mini-stat-label">Spent</div>
+        <div class="mini-stat-value">${formatMoney(totalSpent)}</div>
       </div>
-      <div id="passportSummary" class="passport-summary-card">Loading passport...</div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Your Badges</h2>
-        <p>Unlock more by checking in and submitting prices</p>
+      <div class="mini-stat">
+        <div class="mini-stat-label">Government</div>
+        <div class="mini-stat-value">${formatMoney(totalGov)}</div>
       </div>
-      <div id="badgeRow" class="badge-row"></div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Visited Pubs</h2>
-        <p>Your collected passport stamps</p>
+      <div class="mini-stat">
+        <div class="mini-stat-label">Pub side</div>
+        <div class="mini-stat-value">${formatMoney(totalPub)}</div>
       </div>
-      <div id="visitedPubs" class="passport-grid"></div>
-    </section>
+    </div>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Still To Visit</h2>
-        <p>Complete the Westminster collection</p>
-      </div>
-      <div id="unvisitedPubs" class="passport-grid"></div>
-    </section>
-  </main>
+    <div class="comparison-line">
+      Pub side <strong>${formatMoney(totalPub)}</strong> vs Government <strong>${formatMoney(totalGov)}</strong>
+    </div>
+  `;
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      getDocs
-    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-    import {
-      getAuth,
-      signInAnonymously
-    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+  // BADGES
+  badgeRowEl.innerHTML = `
+    <div class="badge-card ${visitedCount>=1?"unlocked":"locked"}">🍺 First Pub</div>
+    <div class="badge-card ${visitedCount>=5?"unlocked":"locked"}">🍻 5 Pubs</div>
+    <div class="badge-card ${priceCount>=5?"unlocked":"locked"}">💷 Price Scout</div>
+  `;
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
-      authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal",
-      storageBucket: "pintsignal.firebasestorage.app",
-      messagingSenderId: "63376472196",
-      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
-    };
+  // LISTS
+  visitedEl.innerHTML = "";
+  unvisitedEl.innerHTML = "";
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-
-    const personalTotalsEl = document.getElementById("personalTotals");
-    const summaryEl = document.getElementById("passportSummary");
-    const badgeRowEl = document.getElementById("badgeRow");
-    const visitedPubsEl = document.getElementById("visitedPubs");
-    const unvisitedPubsEl = document.getElementById("unvisitedPubs");
-
-    function formatMoney(value) {
-      return `£${Number(value).toFixed(2)}`;
+  pubs.forEach(pub => {
+    if (visited.has(pub.id)) {
+      visitedEl.appendChild(stamp(pub, true));
+    } else {
+      unvisitedEl.appendChild(stamp(pub, false));
     }
+  });
+}
 
-    function getBadgeTier(visitedCount, priceCount) {
-      const xp = (visitedCount * 10) + (priceCount * 15);
+load();
+</script>
 
-      if (xp >= 300) {
-        return {
-          label: "🏆 Pint Legend",
-          subtitle: "You’re becoming a Westminster pub master."
-        };
-      }
-
-      if (xp >= 150) {
-        return {
-          label: "🍺 Regular",
-          subtitle: "Solid pub momentum."
-        };
-      }
-
-      if (xp >= 75) {
-        return {
-          label: "🧭 Explorer",
-          subtitle: "You’re building a proper pub trail."
-        };
-      }
-
-      return {
-        label: "✨ New Scout",
-        subtitle: "Start collecting your first stamps."
-      };
-    }
-
-    function buildBadgeData(visitedCount, priceCount, totalPubs) {
-      return [
-        {
-          emoji: visitedCount >= 1 ? "✅" : "⬜",
-          title: "First Stamp",
-          unlocked: visitedCount >= 1
-        },
-        {
-          emoji: visitedCount >= 3 ? "✅" : "⬜",
-          title: "3 Pubs Visited",
-          unlocked: visitedCount >= 3
-        },
-        {
-          emoji: visitedCount >= 5 ? "✅" : "⬜",
-          title: "5 Pubs Visited",
-          unlocked: visitedCount >= 5
-        },
-        {
-          emoji: priceCount >= 1 ? "✅" : "⬜",
-          title: "Price Scout",
-          unlocked: priceCount >= 1
-        },
-        {
-          emoji: priceCount >= 5 ? "✅" : "⬜",
-          title: "Price Machine",
-          unlocked: priceCount >= 5
-        },
-        {
-          emoji: visitedCount === totalPubs && totalPubs > 0 ? "🏁" : "⬜",
-          title: "Westminster Complete",
-          unlocked: visitedCount === totalPubs && totalPubs > 0
-        }
-      ];
-    }
-
-    function calculatePintEconomics(salePrice) {
-      const price = Number(salePrice);
-      const vat = price * 0.20;
-      const beerDuty = 0.60;
-      const beerCost = 1.50;
-      const overheads = 3.00;
-      const governmentRevenue = vat + beerDuty;
-      const pubProfit = price - vat - beerDuty - beerCost - overheads;
-
-      return {
-        salePrice: price,
-        vat,
-        beerDuty,
-        beerCost,
-        overheads,
-        governmentRevenue,
-        pubProfit
-      };
-    }
-
-    function createStampCard(pub, visited) {
-      const wrapper = document.createElement("button");
-      wrapper.className = visited ? "passport-stamp visited" : "passport-stamp unvisited";
-      wrapper.type = "button";
-
-      wrapper.innerHTML = `
-        <div class="stamp-status">${visited ? "STAMPED" : "UNVISITED"}</div>
-        <div class="stamp-emoji">${visited ? "🍺" : "📍"}</div>
-        <div class="stamp-title">${pub.name}</div>
-        <div class="stamp-meta">${pub.area || "Westminster"}</div>
-      `;
-
-      wrapper.addEventListener("click", () => {
-        window.location.href = `pub.html?id=${pub.id}`;
-      });
-
-      return wrapper;
-    }
-
-    async function load() {
-      try {
-        const authResult = await signInAnonymously(auth);
-        const uid = authResult.user.uid;
-
-        const pubsSnap = await getDocs(collection(db, "pubs"));
-        const checkinsSnap = await getDocs(collection(db, "checkins"));
-        const pricesSnap = await getDocs(collection(db, "prices"));
-
-        const visited = new Set();
-        let myPriceCount = 0;
-        let totalSpent = 0;
-        let totalPubProfit = 0;
-        let totalGovernmentRevenue = 0;
-
-        checkinsSnap.forEach(doc => {
-          const data = doc.data();
-          if (data.userId === uid && data.pubId) {
-            visited.add(data.pubId);
-          }
-        });
-
-        pricesSnap.forEach(doc => {
-          const data = doc.data();
-
-          if (data.userId === uid) {
-            myPriceCount++;
-            const price = Number(data.price || 0);
-            totalSpent += price;
-
-            const economics = calculatePintEconomics(price);
-            totalPubProfit += economics.pubProfit;
-            totalGovernmentRevenue += economics.governmentRevenue;
-          }
-        });
-
-        const pubs = [];
-        pubsSnap.forEach(doc => {
-          pubs.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
-
-        const visitedCount = visited.size;
-        const totalPubs = pubs.length;
-        const progressPercent = totalPubs === 0 ? 0 : Math.round((visitedCount / totalPubs) * 100);
-        const xp = (visitedCount * 10) + (myPriceCount * 15);
-        const tier = getBadgeTier(visitedCount, myPriceCount);
-
-        personalTotalsEl.innerHTML = `
-          <div class="passport-hero-row">
-            <div>
-              <div class="hero-badge">Your Totals</div>
-              <div class="hero-title">${myPriceCount} pints logged</div>
-              <div class="stack-meta">Based on your submitted prices</div>
-            </div>
-            <div class="passport-xp-pill">${xp} XP</div>
-          </div>
-
-          <div class="stats-row">
-            <div class="mini-stat">
-              <div class="mini-stat-label">Total spent</div>
-              <div class="mini-stat-value">${formatMoney(totalSpent)}</div>
-            </div>
-            <div class="mini-stat">
-              <div class="mini-stat-label">Est. pub side</div>
-              <div class="mini-stat-value">${formatMoney(totalPubProfit)}</div>
-            </div>
-            <div class="mini-stat">
-              <div class="mini-stat-label">Government take</div>
-              <div class="mini-stat-value">${formatMoney(totalGovernmentRevenue)}</div>
-            </div>
-          </div>
-
-          <div class="comparison-line" style="margin-top:14px;">
-            Pub side <strong>${formatMoney(totalPubProfit)}</strong> vs Government <strong>${formatMoney(totalGovernmentRevenue)}</strong> across your logged pints
-          </div>
-        `;
-
-        summaryEl.innerHTML = `
-          <div class="passport-hero-row">
-            <div>
-              <div class="hero-badge">${tier.label}</div>
-              <div class="hero-title">${visitedCount} / ${totalPubs} pubs stamped</div>
-              <div class="stack-meta">${tier.subtitle}</div>
-            </div>
-            <div class="passport-xp-pill">${xp} XP</div>
-          </div>
-
-          <div class="passport-progress-wrap">
-            <div class="passport-progress-bar">
-              <div class="passport-progress-fill" style="width:${progressPercent}%"></div>
-            </div>
-            <div class="stack-meta">${progressPercent}% complete</div>
-          </div>
-
-          <div class="stats-row">
-            <div class="mini-stat">
-              <div class="mini-stat-label">Visited</div>
-              <div class="mini-stat-value">${visitedCount}</div>
-            </div>
-            <div class="mini-stat">
-              <div class="mini-stat-label">Prices</div>
-              <div class="mini-stat-value">${myPriceCount}</div>
-            </div>
-            <div class="mini-stat">
-              <div class="mini-stat-label">Remaining</div>
-              <div class="mini-stat-value">${Math.max(totalPubs - visitedCount, 0)}</div>
-            </div>
-          </div>
-        `;
-
-        const badges = buildBadgeData(visitedCount, myPriceCount, totalPubs);
-        badgeRowEl.innerHTML = "";
-
-        badges.forEach(badge => {
-          const el = document.createElement("div");
-          el.className = badge.unlocked ? "badge-card unlocked" : "badge-card locked";
-          el.innerHTML = `
-            <div class="badge-emoji">${badge.emoji}</div>
-            <div class="badge-title">${badge.title}</div>
-          `;
-          badgeRowEl.appendChild(el);
-        });
-
-        visitedPubsEl.innerHTML = "";
-        unvisitedPubsEl.innerHTML = "";
-
-        const visitedPubs = pubs.filter(pub => visited.has(pub.id));
-        const unvisitedPubs = pubs.filter(pub => !visited.has(pub.id));
-
-        if (visitedPubs.length === 0) {
-          visitedPubsEl.innerHTML = `<div class="empty-state">No passport stamps yet. Go check into your first pub.</div>`;
-        } else {
-          visitedPubs.forEach(pub => {
-            visitedPubsEl.appendChild(createStampCard(pub, true));
-          });
-        }
-
-        if (unvisitedPubs.length === 0) {
-          unvisitedPubsEl.innerHTML = `<div class="empty-state">You’ve visited every loaded pub. Legend.</div>`;
-        } else {
-          unvisitedPubs.forEach(pub => {
-            unvisitedPubsEl.appendChild(createStampCard(pub, false));
-          });
-        }
-      } catch (error) {
-        console.error(error);
-
-        personalTotalsEl.innerHTML = `
-          <div class="empty-state">
-            Could not load your totals.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-
-        summaryEl.innerHTML = `
-          <div class="empty-state">
-            Could not load passport summary.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-
-        badgeRowEl.innerHTML = `
-          <div class="empty-state">
-            Could not load badges.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-
-        visitedPubsEl.innerHTML = `
-          <div class="empty-state">
-            Could not load visited pubs.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-
-        unvisitedPubsEl.innerHTML = `
-          <div class="empty-state">
-            Could not load unvisited pubs.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-      }
-    }
-
-    load();
-  </script>
 </body>
 </html>
