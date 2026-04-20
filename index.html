@@ -12,7 +12,7 @@
     <div class="topbar-inner">
       <div>
         <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Cheap pint radar, pub passport, and check-ins</div>
+        <div class="brand-subtitle">Uncovered London MVP</div>
       </div>
 
       <nav class="menu">
@@ -30,7 +30,7 @@
     <section class="panel">
       <div class="panel-header">
         <h2>Map</h2>
-        <p>Your live pub map comes first</p>
+        <p>Your live pub map with reveal circles from visited pubs</p>
       </div>
 
       <div id="map"></div>
@@ -40,7 +40,15 @@
         <button onclick="geocodeAllPubs()">Load All Pub Coordinates</button>
       </div>
 
-      <div id="mapStatus" class="stack-meta" style="margin-top:10px;">Ready.</div>
+      <div id="mapStatus" class="stack-meta top-gap">Ready.</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Uncovered London</h2>
+        <p>Reveal circles appear when you first check in at a pub</p>
+      </div>
+      <div id="coverageCard" class="totaliser-card">Loading coverage...</div>
     </section>
 
     <section class="panel">
@@ -76,7 +84,7 @@
         <a class="quick-link-card" href="passport.html">
           <div class="quick-link-emoji">🪪</div>
           <div class="quick-link-title">Pub Passport</div>
-          <div class="quick-link-text">Track visited pubs and unlock badges.</div>
+          <div class="quick-link-text">Track visited pubs and your uncovering progress.</div>
         </a>
 
         <a class="quick-link-card" href="leaderboard.html">
@@ -130,22 +138,47 @@
 
     const datasetCardEl = document.getElementById("datasetCard");
     const communityTotalsEl = document.getElementById("communityTotals");
+    const coverageCardEl = document.getElementById("coverageCard");
     const cheapestEl = document.getElementById("cheapest");
     const mapStatusEl = document.getElementById("mapStatus");
+
+    const REVEAL_RADIUS_METERS = 200;
+    const WESTMINSTER_BOUNDS = {
+      north: 51.5159,
+      south: 51.4852,
+      west: -0.1592,
+      east: -0.1092
+    };
 
     let map = L.map("map").setView([51.5007, -0.1290], 14);
     let userLatLng = null;
     let userMarker = null;
     let pubMarkers = [];
+    let revealCircles = [];
+    let visitedPubIds = new Set();
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: "&copy; OpenStreetMap & CARTO",
       maxZoom: 19
     }).addTo(map);
 
-    function createPintIcon() {
+    const boundaryRect = L.rectangle(
+      [
+        [WESTMINSTER_BOUNDS.south, WESTMINSTER_BOUNDS.west],
+        [WESTMINSTER_BOUNDS.north, WESTMINSTER_BOUNDS.east]
+      ],
+      {
+        color: "#8e8e93",
+        weight: 1,
+        fillColor: "#000000",
+        fillOpacity: 0.08,
+        interactive: false
+      }
+    ).addTo(map);
+
+    function createPintIcon(isVisited) {
       return L.divIcon({
-        html: '<div class="pint-marker-inner">🍺</div>',
+        html: `<div class="pint-marker-inner ${isVisited ? "pint-marker-visited" : "pint-marker-default"}">🍺</div>`,
         className: "pint-marker",
         iconSize: [34, 34],
         iconAnchor: [17, 28]
@@ -246,6 +279,30 @@
       pubMarkers = [];
     }
 
+    function clearRevealCircles() {
+      revealCircles.forEach(circle => map.removeLayer(circle));
+      revealCircles = [];
+    }
+
+    function renderRevealCircles() {
+      clearRevealCircles();
+
+      const pubs = getResolvedPubs();
+      const visitedPubs = pubs.filter(pub => hasCoordinates(pub) && visitedPubIds.has(pub.id));
+
+      visitedPubs.forEach(pub => {
+        const circle = L.circle([pub.lat, pub.lng], {
+          radius: REVEAL_RADIUS_METERS,
+          color: "#ff9f0a",
+          weight: 1,
+          fillColor: "#ffcc80",
+          fillOpacity: 0.12
+        }).addTo(map);
+
+        revealCircles.push(circle);
+      });
+    }
+
     function renderPubsOnMap() {
       clearPubMarkers();
 
@@ -253,13 +310,20 @@
       const mappablePubs = pubs.filter(hasCoordinates);
 
       mappablePubs.forEach(pub => {
-        const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
+        const isVisited = visitedPubIds.has(pub.id);
+
+        const marker = L.marker([pub.lat, pub.lng], {
+          icon: createPintIcon(isVisited)
+        }).addTo(map);
 
         marker.bindPopup(`
           <div style="min-width:180px;">
             <strong>${pub.name}</strong><br>
             ${pub.address || ""}<br>
-            ${pub.postcode || ""}
+            ${pub.postcode || ""}<br>
+            <span style="color:${isVisited ? "#1d7a34" : "#666"};">
+              ${isVisited ? "Visited ✓" : "Not visited yet"}
+            </span>
           </div>
         `);
 
@@ -271,6 +335,7 @@
       });
 
       renderDatasetCard();
+      renderRevealCircles();
     }
 
     function renderDatasetCard() {
@@ -304,7 +369,43 @@
         </div>
 
         <div class="comparison-line compact">
-          Click <strong>Load All Pub Coordinates</strong> once. The browser will cache them for you.
+          Only pubs with coordinates can appear on the map and count toward uncovering.
+        </div>
+      `;
+    }
+
+    function renderCoverageCard() {
+      const pubs = getResolvedPubs();
+      const visitedMappable = pubs.filter(pub => hasCoordinates(pub) && visitedPubIds.has(pub.id));
+
+      const estimatedAreaKm2 = ((visitedMappable.length * Math.PI * REVEAL_RADIUS_METERS * REVEAL_RADIUS_METERS) / 1000000) * 0.7;
+
+      coverageCardEl.innerHTML = `
+        <div class="totaliser-top">
+          <div>
+            <div class="hero-badge">Uncovered London</div>
+            <div class="hero-title">${visitedMappable.length} reveal circles</div>
+            <div class="stack-meta">Each unique pub check-in reveals ${REVEAL_RADIUS_METERS}m</div>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Visited pubs</div>
+            <div class="mini-stat-value">${visitedPubIds.size}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Mapped visits</div>
+            <div class="mini-stat-value">${visitedMappable.length}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Est. revealed area</div>
+            <div class="mini-stat-value">${estimatedAreaKm2.toFixed(2)} km²</div>
+          </div>
+        </div>
+
+        <div class="comparison-line compact">
+          Full uncovered % is shown on your Passport page because it is personal to each user.
         </div>
       `;
     }
@@ -342,6 +443,7 @@
       if (missingPubs.length === 0) {
         mapStatusEl.textContent = "All pubs already have coordinates.";
         renderPubsOnMap();
+        renderCoverageCard();
         return;
       }
 
@@ -372,7 +474,20 @@
       }
 
       renderPubsOnMap();
+      renderCoverageCard();
       mapStatusEl.textContent = `Done. Added ${successCount} pub coordinates. Failed: ${failCount}.`;
+    }
+
+    async function loadVisitedPubIds() {
+      visitedPubIds = new Set();
+
+      const checkSnap = await getDocs(collection(db, "checkins"));
+      checkSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.pubId) {
+          visitedPubIds.add(data.pubId);
+        }
+      });
     }
 
     async function loadCommunityData() {
@@ -490,8 +605,10 @@
     window.geocodeAllPubs = geocodeAllPubs;
 
     async function start() {
+      await loadVisitedPubIds();
       renderDatasetCard();
       renderPubsOnMap();
+      renderCoverageCard();
       await loadCommunityData();
     }
 
