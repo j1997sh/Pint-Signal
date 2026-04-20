@@ -51,6 +51,11 @@
       <h2>Recent Check-Ins</h2>
       <div id="checkinList" class="checkin-list"></div>
     </section>
+
+    <section class="list-wrap">
+      <h2>Recent Pint Prices</h2>
+      <div id="priceList" class="price-list"></div>
+    </section>
   </div>
 
   <script
@@ -134,6 +139,7 @@
     const pubListEl = document.getElementById("pubList");
     const selectedPubPanelEl = document.getElementById("selectedPubPanel");
     const checkinListEl = document.getElementById("checkinList");
+    const priceListEl = document.getElementById("priceList");
 
     let map;
     let userMarker = null;
@@ -143,6 +149,7 @@
     let currentUser = null;
     let allPubs = [];
     let selectedPub = null;
+    let selectedPubLatestPrice = null;
 
     function setStatus(message) {
       statusEl.textContent = message;
@@ -190,6 +197,14 @@
       return `${diffDays} days ago`;
     }
 
+    function formatPrice(value) {
+      const numberValue = Number(value);
+      if (Number.isNaN(numberValue)) {
+        return "£0.00";
+      }
+      return `£${numberValue.toFixed(2)}`;
+    }
+
     function initMap() {
       map = L.map("map").setView([51.5007, -0.1290], 15);
 
@@ -217,18 +232,55 @@
       return distance <= CHECKIN_RADIUS_METERS;
     }
 
-    function renderSelectedPub() {
+    async function getLatestPriceForPub(pubId) {
+      const q = query(
+        collection(db, "prices"),
+        where("pubId", "==", pubId),
+        orderBy("createdAtMs", "desc"),
+        limit(1)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        return null;
+      }
+
+      return snapshot.docs[0].data();
+    }
+
+    async function renderSelectedPub() {
       if (!selectedPub) {
         selectedPubPanelEl.className = "selected-panel empty";
         selectedPubPanelEl.innerHTML = "Tap a pub marker or pub card to select a pub.";
         return;
       }
 
+      selectedPubLatestPrice = await getLatestPriceForPub(selectedPub.id);
+
       const distance = getDistanceToPub(selectedPub);
       const inRange = isUserInRange(selectedPub);
 
-      selectedPubPanelEl.className = "selected-panel";
+      const latestPriceHtml = selectedPubLatestPrice
+        ? `
+          <div class="selected-price-box">
+            <div class="selected-price-title">Latest Pint Price</div>
+            <div class="selected-price-main">
+              ${selectedPubLatestPrice.drinkName} • ${formatPrice(selectedPubLatestPrice.price)}
+            </div>
+            <div class="selected-price-meta">
+              ${selectedPubLatestPrice.note ? selectedPubLatestPrice.note + " • " : ""}${formatTimeAgo(selectedPubLatestPrice.createdAtMs)}
+            </div>
+          </div>
+        `
+        : `
+          <div class="selected-price-box">
+            <div class="selected-price-title">Latest Pint Price</div>
+            <div class="selected-price-meta">No pint prices submitted yet.</div>
+          </div>
+        `;
 
+      selectedPubPanelEl.className = "selected-panel";
       selectedPubPanelEl.innerHTML = `
         <div class="selected-title">${selectedPub.name}</div>
         <div class="selected-meta">${selectedPub.area} • ${(selectedPub.tags || []).join(", ")}</div>
@@ -237,11 +289,38 @@
           ${
             distance === null
               ? "Allow location to see your distance."
-              : `${formatDistance(distance)} • ${inRange ? "You can check in" : `Need to be within ${CHECKIN_RADIUS_METERS}m`}`
+              : `${formatDistance(distance)} • ${inRange ? "You can check in and submit a price" : `Need to be within ${CHECKIN_RADIUS_METERS}m`}`
           }
         </div>
+
+        ${latestPriceHtml}
+
         <div class="selected-actions">
           <button onclick="checkInSelectedPub()">Check In Here</button>
+        </div>
+
+        <div class="price-form-wrap">
+          <h3>Submit Pint Price</h3>
+          <div class="form-grid">
+            <label class="form-field">
+              <span>Drink name</span>
+              <input id="priceDrinkName" type="text" placeholder="e.g. Guinness" />
+            </label>
+
+            <label class="form-field">
+              <span>Price (£)</span>
+              <input id="priceValue" type="number" step="0.01" min="0" placeholder="e.g. 6.80" />
+            </label>
+
+            <label class="form-field full-width">
+              <span>Optional note</span>
+              <input id="priceNote" type="text" placeholder="e.g. Pint of Madri" />
+            </label>
+          </div>
+
+          <div class="selected-actions">
+            <button onclick="submitPriceForSelectedPub()">Submit Pint Price</button>
+          </div>
         </div>
       `;
     }
@@ -377,6 +456,47 @@
       });
     }
 
+    async function renderRecentPrices() {
+      priceListEl.innerHTML = "";
+
+      const q = query(
+        collection(db, "prices"),
+        orderBy("createdAtMs", "desc"),
+        limit(10)
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        priceListEl.innerHTML = '<div class="empty-state">No pint prices yet.</div>';
+        return;
+      }
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+
+        const card = document.createElement("div");
+        card.className = "price-card";
+
+        const title = document.createElement("div");
+        title.className = "price-title";
+        title.textContent = `${data.pubName || "Unknown pub"} • ${data.drinkName || "Drink"}`;
+
+        const price = document.createElement("div");
+        price.className = "price-main";
+        price.textContent = formatPrice(data.price);
+
+        const meta = document.createElement("div");
+        meta.className = "price-meta";
+        meta.textContent = `${data.note ? data.note + " • " : ""}${formatTimeAgo(data.createdAtMs || Date.now())}`;
+
+        card.appendChild(title);
+        card.appendChild(price);
+        card.appendChild(meta);
+        priceListEl.appendChild(card);
+      });
+    }
+
     async function pubExistsByName(name) {
       const pubsRef = collection(db, "pubs");
       const q = query(pubsRef, where("name", "==", name));
@@ -414,7 +534,7 @@
 
       renderPubMarkers(pubs);
       renderPubList(pubs);
-      renderSelectedPub();
+      await renderSelectedPub();
 
       setStatus(`Loaded ${pubs.length} pub${pubs.length === 1 ? "" : "s"}.`);
     }
@@ -442,6 +562,7 @@
       try {
         await loadPubsFromFirestore();
         await renderRecentCheckins();
+        await renderRecentPrices();
       } catch (error) {
         console.error(error);
         setStatus(`Could not refresh pubs: ${error.message}`);
@@ -599,10 +720,81 @@
       }
     }
 
+    async function submitPriceForSelectedPub() {
+      if (!selectedPub) {
+        setStatus("Select a pub first.");
+        return;
+      }
+
+      if (!currentUser) {
+        setStatus("User not ready yet.");
+        return;
+      }
+
+      if (!userLatLng) {
+        setStatus("Your live location is not ready yet.");
+        return;
+      }
+
+      const distance = getDistanceToPub(selectedPub);
+
+      if (distance === null || distance > CHECKIN_RADIUS_METERS) {
+        setStatus(`Too far away. You must be within ${CHECKIN_RADIUS_METERS}m to submit a price.`);
+        return;
+      }
+
+      const drinkNameInput = document.getElementById("priceDrinkName");
+      const priceValueInput = document.getElementById("priceValue");
+      const priceNoteInput = document.getElementById("priceNote");
+
+      const drinkName = drinkNameInput.value.trim();
+      const note = priceNoteInput.value.trim();
+      const price = Number(priceValueInput.value);
+
+      if (!drinkName) {
+        setStatus("Enter a drink name first.");
+        return;
+      }
+
+      if (Number.isNaN(price) || price <= 0) {
+        setStatus("Enter a valid price.");
+        return;
+      }
+
+      try {
+        setStatus(`Submitting price for ${selectedPub.name}...`);
+
+        await addDoc(collection(db, "prices"), {
+          pubId: selectedPub.id,
+          pubName: selectedPub.name,
+          userId: currentUser.uid,
+          drinkName,
+          price,
+          note,
+          createdAtMs: Date.now(),
+          createdAtIso: new Date().toISOString(),
+          userLat: userLatLng.lat,
+          userLng: userLatLng.lng
+        });
+
+        drinkNameInput.value = "";
+        priceValueInput.value = "";
+        priceNoteInput.value = "";
+
+        setStatus(`Submitted ${drinkName} at ${formatPrice(price)} for ${selectedPub.name}.`);
+        await renderSelectedPub();
+        await renderRecentPrices();
+      } catch (error) {
+        console.error(error);
+        setStatus(`Price submission failed: ${error.message}`);
+      }
+    }
+
     window.loadWestminsterPubs = loadWestminsterPubs;
     window.refreshPubs = refreshPubs;
     window.centerOnUser = centerOnUser;
     window.checkInSelectedPub = checkInSelectedPub;
+    window.submitPriceForSelectedPub = submitPriceForSelectedPub;
 
     async function startApp() {
       try {
@@ -612,6 +804,7 @@
         setStatus("Signed in. Loading pubs...");
         await loadPubsFromFirestore();
         await renderRecentCheckins();
+        await renderRecentPrices();
         startLiveLocation();
       } catch (error) {
         console.error(error);
