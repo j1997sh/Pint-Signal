@@ -49,14 +49,14 @@ export const signals = [
     lng: -0.1365
   },
   {
-    id: "waterloo",
+    id: "waterloo-edge",
     name: "Waterloo Edge Signal",
     districtId: "covent-garden-strand",
     lat: 51.5033,
     lng: -0.1147
   },
   {
-    id: "vauxhall-edge",
+    id: "pimlico-edge",
     name: "Pimlico Edge Signal",
     districtId: "westminster-victoria",
     lat: 51.4866,
