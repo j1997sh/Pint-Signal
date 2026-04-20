@@ -1,11 +1,9 @@
-/* =========================
-   RESET
-========================= */
 * {
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
 }
@@ -16,9 +14,6 @@ body {
   color: #f5efe6;
 }
 
-/* =========================
-   LAYOUT
-========================= */
 .page {
   max-width: 1100px;
   margin: 0 auto;
@@ -29,9 +24,6 @@ body {
   max-width: 760px;
 }
 
-/* =========================
-   TOP BAR
-========================= */
 .topbar {
   position: sticky;
   top: 0;
@@ -79,9 +71,6 @@ body {
   color: #ffd27a;
 }
 
-/* =========================
-   PANELS
-========================= */
 .panel {
   margin-top: 24px;
   background: linear-gradient(180deg, rgba(36, 29, 24, 0.96), rgba(26, 21, 18, 0.96));
@@ -109,13 +98,10 @@ body {
   font-size: 14px;
 }
 
-/* =========================
-   MAP
-========================= */
 .map-shell {
   position: relative;
   margin-top: 14px;
-  height: 520px;
+  height: 560px;
   border-radius: 24px;
   overflow: hidden;
   border: 1px solid rgba(255, 210, 122, 0.16);
@@ -138,10 +124,10 @@ body {
   z-index: 400;
   background:
     radial-gradient(circle at center,
-      rgba(0,0,0,0.00) 34%,
-      rgba(0,0,0,0.16) 56%,
-      rgba(0,0,0,0.34) 80%,
-      rgba(0,0,0,0.58) 100%);
+      rgba(0,0,0,0.00) 30%,
+      rgba(0,0,0,0.18) 54%,
+      rgba(0,0,0,0.38) 79%,
+      rgba(0,0,0,0.66) 100%);
 }
 
 .map-overlay-noise {
@@ -150,14 +136,14 @@ body {
   inset: 0;
   z-index: 401;
   opacity: 0.07;
-  background-image: radial-gradient(rgba(255,255,255,0.4) 0.7px, transparent 0.7px);
+  background-image: radial-gradient(rgba(255,255,255,0.35) 0.7px, transparent 0.7px);
   background-size: 8px 8px;
   mix-blend-mode: soft-light;
 }
 
 .leaflet-container {
   background: #0f0d0c;
-  filter: saturate(0.72) contrast(1.06) brightness(0.94);
+  filter: saturate(0.58) contrast(1.08) brightness(0.88);
 }
 
 .leaflet-control-zoom {
@@ -186,29 +172,60 @@ body {
   color: #fff4df;
 }
 
-/* =========================
-   MAP MARKERS
-========================= */
-.pint-marker {
+.signal-marker-wrap,
+.pint-marker-wrap {
   background: transparent;
   border: none;
 }
 
-.pint-marker-inner {
+.signal-marker {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signal-core {
+  position: relative;
+  z-index: 3;
   font-size: 24px;
   line-height: 1;
-  transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
 }
 
-.pint-marker-default {
-  opacity: 0.90;
+.signal-ring {
+  position: absolute;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 210, 122, 0.25);
+  z-index: 1;
+}
+
+.signal-ring-1 {
+  width: 34px;
+  height: 34px;
+}
+
+.signal-ring-2 {
+  width: 46px;
+  height: 46px;
+}
+
+.signal-locked .signal-core {
+  opacity: 0.44;
   filter:
-    drop-shadow(0 0 6px rgba(255, 191, 94, 0.16))
-    drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+    grayscale(1)
+    brightness(0.75)
+    drop-shadow(0 2px 6px rgba(0,0,0,0.45));
 }
 
-.pint-marker-visited {
-  transform: scale(1.16);
+.signal-locked .signal-ring {
+  opacity: 0.14;
+}
+
+.signal-unlocked .signal-core {
+  transform: scale(1.12);
   opacity: 1;
   filter:
     drop-shadow(0 0 10px rgba(255, 210, 122, 0.65))
@@ -216,39 +233,19 @@ body {
     drop-shadow(0 4px 10px rgba(0,0,0,0.35));
 }
 
-/* For the newer simple signal/pint map version */
-.signal {
-  font-size: 22px;
-  line-height: 1;
-  opacity: 0.38;
-  filter:
-    grayscale(1)
-    brightness(0.85)
-    drop-shadow(0 2px 6px rgba(0,0,0,0.45));
-  transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
+.signal-unlocked .signal-ring {
+  opacity: 0.55;
+  border-color: rgba(255, 210, 122, 0.45);
 }
 
-.signal.on {
-  opacity: 1;
-  transform: scale(1.18);
-  filter:
-    grayscale(0)
-    brightness(1.05)
-    drop-shadow(0 0 10px rgba(255, 210, 122, 0.48))
-    drop-shadow(0 0 18px rgba(255, 184, 77, 0.24));
-}
-
-.pint {
-  font-size: 20px;
+.pint-marker-ac {
+  font-size: 24px;
   line-height: 1;
   filter:
-    drop-shadow(0 0 6px rgba(255, 191, 94, 0.24))
+    drop-shadow(0 0 8px rgba(255, 191, 94, 0.26))
     drop-shadow(0 2px 6px rgba(0,0,0,0.35));
 }
 
-/* =========================
-   TYPOGRAPHY / HERO
-========================= */
 .hero-title {
   font-size: 36px;
   font-weight: 700;
@@ -285,9 +282,6 @@ body {
   color: #bba98f;
 }
 
-/* =========================
-   STATS
-========================= */
 .stats-row {
   display: flex;
   gap: 12px;
@@ -318,9 +312,6 @@ body {
   margin-top: 4px;
 }
 
-/* =========================
-   CARDS / LISTS
-========================= */
 .info-card,
 .totaliser-card,
 .awareness-card,
@@ -356,9 +347,6 @@ body {
   cursor: pointer;
 }
 
-/* =========================
-   BUTTONS
-========================= */
 button {
   background: linear-gradient(180deg, #201a16, #161210);
   color: #fff2d5;
@@ -381,9 +369,6 @@ button:hover {
   flex-wrap: wrap;
 }
 
-/* =========================
-   FORMS
-========================= */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -431,9 +416,6 @@ input::placeholder {
   background: rgba(255,255,255,0.04);
 }
 
-/* =========================
-   TOTALISER / MONEY
-========================= */
 .totaliser-top {
   display: flex;
   justify-content: space-between;
@@ -575,9 +557,6 @@ input::placeholder {
   padding: 10px;
 }
 
-/* =========================
-   PASSPORT
-========================= */
 .passport-summary-card {
   background: linear-gradient(180deg, rgba(51,39,27,0.92), rgba(30,24,19,0.92));
   border: 1px solid rgba(255, 210, 122, 0.10);
@@ -682,9 +661,6 @@ input::placeholder {
   color: #bba98f;
 }
 
-/* =========================
-   PUB PAGE
-========================= */
 .back-link {
   text-decoration: none;
   color: #ffd27a;
@@ -743,9 +719,6 @@ input::placeholder {
   margin-top: 10px;
 }
 
-/* =========================
-   QUICK LINKS
-========================= */
 .quick-link-grid {
   display: flex;
   gap: 10px;
@@ -783,9 +756,6 @@ input::placeholder {
   color: #bba98f;
 }
 
-/* =========================
-   HELPERS
-========================= */
 .empty-state {
   color: #bba98f;
   text-align: center;
@@ -802,9 +772,6 @@ code {
   color: #ffd27a;
 }
 
-/* =========================
-   MOBILE
-========================= */
 @media (max-width: 700px) {
   .topbar-inner {
     flex-direction: column;
@@ -827,7 +794,7 @@ code {
   }
 
   .map-shell {
-    height: 380px;
+    height: 400px;
   }
 
   .hero-title {
