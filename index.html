@@ -3,6 +3,7 @@
 <head>
   <title>Pint Signal</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 </head>
 
 <body>
@@ -21,10 +22,15 @@
 <h2>Your Progress</h2>
 <div id="xpCard" class="card"></div>
 
+<h2>Map</h2>
+<div id="map"></div>
+
 <h2>Cheap Pint Radar</h2>
 <div id="cheapest"></div>
 
 </main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
@@ -32,7 +38,7 @@ import { getFirestore, collection, getDocs } from "https://www.gstatic.com/fireb
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
 const app = initializeApp({
-  apiKey:"AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+  apiKey:"AIzaSyB...",
   authDomain:"pintsignal.firebaseapp.com",
   projectId:"pintsignal"
 });
@@ -40,71 +46,58 @@ const app = initializeApp({
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+let map = L.map('map').setView([51.5,-0.12],15);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+
 let user;
+let pubs = [];
 
-function xpFromData(checkins, prices){
-  return (checkins * 10) + (prices * 15);
+function pintIcon(){
+  return L.divIcon({html:"🍺",className:"pint"});
 }
 
-function getBadge(xp){
-  if(xp > 200) return "🏆 Pint Legend";
-  if(xp > 100) return "🍺 Regular";
-  if(xp > 50) return "👣 Explorer";
-  return "🆕 New Drinker";
-}
+navigator.geolocation.watchPosition(pos=>{
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+  map.setView([lat,lng],16);
+});
 
 async function load(){
   const u = await signInAnonymously(auth);
   user = u.user;
 
-  const checkSnap = await getDocs(collection(db,"checkins"));
+  const pubSnap = await getDocs(collection(db,"pubs"));
   const priceSnap = await getDocs(collection(db,"prices"));
+  const checkSnap = await getDocs(collection(db,"checkins"));
 
-  let myCheckins = 0;
-  let myPrices = 0;
+  let myC=0,myP=0;
 
-  checkSnap.forEach(d=>{
-    if(d.data().userId === user.uid) myCheckins++;
+  checkSnap.forEach(d=>{if(d.data().userId===user.uid) myC++;});
+  priceSnap.forEach(d=>{if(d.data().userId===user.uid) myP++;});
+
+  const xp = (myC*10)+(myP*15);
+
+  document.getElementById("xpCard").innerHTML =
+    `<b>XP: ${xp}</b><br>Check-ins: ${myC}<br>Prices: ${myP}`;
+
+  pubSnap.forEach(doc=>{
+    const p = doc.data();
+    p.id=doc.id;
+    pubs.push(p);
+
+    const m = L.marker([p.lat,p.lng],{icon:pintIcon()}).addTo(map);
+    m.on("click",()=>window.location="pub.html?id="+p.id);
   });
 
-  priceSnap.forEach(d=>{
-    if(d.data().userId === user.uid) myPrices++;
-  });
+  let prices=[];
+  priceSnap.forEach(d=>prices.push(d.data()));
+  prices.sort((a,b)=>a.price-b.price);
 
-  const xp = xpFromData(myCheckins, myPrices);
-
-  document.getElementById("xpCard").innerHTML = `
-    <b>${getBadge(xp)}</b><br>
-    XP: ${xp}<br>
-    Check-ins: ${myCheckins}<br>
-    Prices submitted: ${myPrices}
-  `;
-
-  buildRadar(priceSnap);
-}
-
-function buildRadar(priceSnap){
-  let prices = [];
-
-  priceSnap.forEach(d=>{
-    prices.push(d.data());
-  });
-
-  prices.sort((a,b)=>a.price - b.price);
-
-  const top = prices.slice(0,3);
-
-  const el = document.getElementById("cheapest");
-  el.innerHTML = "";
-
-  top.forEach(p=>{
-    const div = document.createElement("div");
+  prices.slice(0,3).forEach(p=>{
+    const div=document.createElement("div");
     div.className="card";
-    div.innerHTML = `
-      <b>${p.pubName}</b><br>
-      ${p.drinkName} £${p.price}
-    `;
-    el.appendChild(div);
+    div.innerHTML=`${p.pubName}<br>${p.drinkName} £${p.price}`;
+    document.getElementById("cheapest").appendChild(div);
   });
 }
 
