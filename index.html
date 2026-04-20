@@ -36,6 +36,14 @@
 
     <section class="panel">
       <div class="panel-header">
+        <h2>Community Totaliser</h2>
+        <p>What all logged pints add up to across the app</p>
+      </div>
+      <div id="communityTotals" class="totals-grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
         <h2>Quick Links</h2>
         <p>Jump straight into the big features</p>
       </div>
@@ -83,8 +91,8 @@
 
     <section class="panel">
       <div class="panel-header">
-        <h2>Profit & Tax Awareness</h2>
-        <p>Estimated pub profit and government revenue per pint using a simple UK pub model</p>
+        <h2>Government vs Pub Split</h2>
+        <p>Simple estimate of where the money from one pint goes</p>
       </div>
 
       <div class="info-card">
@@ -140,6 +148,7 @@
     const cheapestEl = document.getElementById("cheapest");
     const awarenessResultEl = document.getElementById("awarenessResult");
     const exampleBreakdownsEl = document.getElementById("exampleBreakdowns");
+    const communityTotalsEl = document.getElementById("communityTotals");
 
     let map = L.map("map").setView([51.5007, -0.1290], 15);
     let userLatLng = null;
@@ -177,7 +186,8 @@
       const beerCost = 1.50;
       const overheads = 3.00;
       const governmentRevenue = vat + beerDuty;
-      const pubProfit = price - vat - beerDuty - beerCost - overheads;
+      const pubAfterDirectTaxAndBeer = price - vat - beerDuty - beerCost;
+      const estimatedSurplusAfterCosts = price - vat - beerDuty - beerCost - overheads;
 
       return {
         salePrice: price,
@@ -186,8 +196,33 @@
         beerCost,
         overheads,
         governmentRevenue,
-        pubProfit
+        pubAfterDirectTaxAndBeer,
+        estimatedSurplusAfterCosts
       };
+    }
+
+    function buildMoneyBar(result) {
+      const total = result.salePrice || 1;
+      const govPct = Math.max((result.governmentRevenue / total) * 100, 0);
+      const beerPct = Math.max((result.beerCost / total) * 100, 0);
+      const overheadPct = Math.max((result.overheads / total) * 100, 0);
+      const pubPct = Math.max((result.estimatedSurplusAfterCosts / total) * 100, 0);
+
+      return `
+        <div class="money-bar">
+          <div class="money-segment government" style="width:${govPct}%"></div>
+          <div class="money-segment beer" style="width:${beerPct}%"></div>
+          <div class="money-segment overhead" style="width:${overheadPct}%"></div>
+          <div class="money-segment pub" style="width:${pubPct}%"></div>
+        </div>
+
+        <div class="money-legend">
+          <div class="legend-item"><span class="legend-dot government"></span>Government</div>
+          <div class="legend-item"><span class="legend-dot beer"></span>Beer cost</div>
+          <div class="legend-item"><span class="legend-dot overhead"></span>Overheads</div>
+          <div class="legend-item"><span class="legend-dot pub"></span>Pub surplus</div>
+        </div>
+      `;
     }
 
     function buildAwarenessCard(result, titleText = "Breakdown") {
@@ -195,6 +230,8 @@
         <div class="awareness-card">
           <div class="hero-badge">${titleText}</div>
           <div class="hero-title">${formatPrice(result.salePrice)} pint</div>
+
+          ${buildMoneyBar(result)}
 
           <div class="breakdown-grid">
             <div class="breakdown-row">
@@ -213,18 +250,22 @@
               <span>Overheads</span>
               <strong>${formatPrice(result.overheads)}</strong>
             </div>
-            <div class="breakdown-row total">
-              <span>Pub profit</span>
-              <strong>${formatPrice(result.pubProfit)}</strong>
-            </div>
             <div class="breakdown-row total government">
               <span>Government revenue</span>
               <strong>${formatPrice(result.governmentRevenue)}</strong>
             </div>
+            <div class="breakdown-row total">
+              <span>Estimated pub surplus after costs</span>
+              <strong>${formatPrice(result.estimatedSurplusAfterCosts)}</strong>
+            </div>
           </div>
 
           <div class="comparison-line">
-            Pub earns <strong>${formatPrice(result.pubProfit)}</strong> vs Government earns <strong>${formatPrice(result.governmentRevenue)}</strong> per pint
+            Pub earns <strong>${formatPrice(result.estimatedSurplusAfterCosts)}</strong> vs Government earns <strong>${formatPrice(result.governmentRevenue)}</strong> per pint
+          </div>
+
+          <div class="small-note">
+            Simplified estimate using VAT 20%, beer duty £0.60, beer cost £1.50, and overheads £3.00 per pint.
           </div>
         </div>
       `;
@@ -248,6 +289,46 @@
       });
     }
 
+    function renderCommunityTotals(prices, checkins, pubs) {
+      let totalSpend = 0;
+      let totalGovernment = 0;
+      let totalPubSurplus = 0;
+
+      prices.forEach(item => {
+        const economics = calculatePintEconomics(item.price);
+        totalSpend += Number(item.price || 0);
+        totalGovernment += economics.governmentRevenue;
+        totalPubSurplus += economics.estimatedSurplusAfterCosts;
+      });
+
+      communityTotalsEl.innerHTML = `
+        <div class="total-card">
+          <div class="mini-stat-label">Pints logged</div>
+          <div class="total-value">${prices.length}</div>
+        </div>
+        <div class="total-card">
+          <div class="mini-stat-label">Spend tracked</div>
+          <div class="total-value">${formatPrice(totalSpend)}</div>
+        </div>
+        <div class="total-card">
+          <div class="mini-stat-label">Estimated government revenue</div>
+          <div class="total-value">${formatPrice(totalGovernment)}</div>
+        </div>
+        <div class="total-card">
+          <div class="mini-stat-label">Estimated pub surplus</div>
+          <div class="total-value">${formatPrice(totalPubSurplus)}</div>
+        </div>
+        <div class="total-card">
+          <div class="mini-stat-label">Check-ins</div>
+          <div class="total-value">${checkins.length}</div>
+        </div>
+        <div class="total-card">
+          <div class="mini-stat-label">Pubs loaded</div>
+          <div class="total-value">${pubs.length}</div>
+        </div>
+      `;
+    }
+
     async function load() {
       const authResult = await signInAnonymously(auth);
       const user = authResult.user;
@@ -258,13 +339,30 @@
 
       let myCheckins = 0;
       let myPrices = 0;
+      const pubs = [];
+      const prices = [];
+      const checkins = [];
 
       checkSnap.forEach(doc => {
-        if (doc.data().userId === user.uid) myCheckins++;
+        const data = doc.data();
+        checkins.push(data);
+        if (data.userId === user.uid) myCheckins++;
       });
 
       priceSnap.forEach(doc => {
-        if (doc.data().userId === user.uid) myPrices++;
+        const data = doc.data();
+        prices.push(data);
+        if (data.userId === user.uid) myPrices++;
+      });
+
+      pubSnap.forEach(doc => {
+        const pub = doc.data();
+        pubs.push({ id: doc.id, ...pub });
+
+        const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
+        marker.on("click", () => {
+          window.location.href = `pub.html?id=${doc.id}`;
+        });
       });
 
       const xp = (myCheckins * 10) + (myPrices * 15);
@@ -288,21 +386,6 @@
         </div>
       `;
 
-      const prices = [];
-
-      pubSnap.forEach(doc => {
-        const pub = doc.data();
-
-        const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
-        marker.on("click", () => {
-          window.location.href = `pub.html?id=${doc.id}`;
-        });
-      });
-
-      priceSnap.forEach(doc => {
-        prices.push(doc.data());
-      });
-
       prices.sort((a, b) => Number(a.price) - Number(b.price));
 
       cheapestEl.innerHTML = "";
@@ -322,7 +405,7 @@
             <div class="stack-price">${price.drinkName || "Drink"} • ${formatPrice(price.price)}</div>
             <div class="stack-meta">${price.note || "Latest submitted price"}</div>
             <div class="radar-compare">
-              Pub earns <strong>${formatPrice(economics.pubProfit)}</strong> vs Government earns <strong>${formatPrice(economics.governmentRevenue)}</strong>
+              Pub earns <strong>${formatPrice(economics.estimatedSurplusAfterCosts)}</strong> vs Government earns <strong>${formatPrice(economics.governmentRevenue)}</strong>
             </div>
           `;
 
@@ -336,6 +419,7 @@
         });
       }
 
+      renderCommunityTotals(prices, checkins, pubs);
       renderAwarenessResult(6);
       renderExampleBreakdowns();
     }
