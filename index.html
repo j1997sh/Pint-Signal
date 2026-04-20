@@ -1,189 +1,510 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pint Signal</title>
-
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
-
-<div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand-title">Pint Signal</div>
-    <div class="menu">
-      <a href="passport.html">Passport</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal</div>
+        <div class="brand-subtitle">District Signal Network</div>
+      </div>
+      <nav class="menu">
+        <a href="index.html">Map</a>
+        <a href="passport.html">Passport</a>
+        <a href="leaderboard.html">Leaderboard</a>
+      </nav>
     </div>
+  </header>
+
+  <div id="map"></div>
+  <div class="map-fog"></div>
+
+  <div class="panel-floating panel-floating-main">
+    <div class="panel-title">Signal Network</div>
+    <div class="panel-sub">Unlock districts, reveal pubs, and build discovery XP</div>
+
+    <div class="floating-stat-row">
+      <div class="floating-stat">
+        <span>Signals</span>
+        <strong id="signalsValue">0 / 0</strong>
+      </div>
+      <div class="floating-stat">
+        <span>Visible pubs</span>
+        <strong id="visiblePubsValue">0</strong>
+      </div>
+      <div class="floating-stat">
+        <span>XP</span>
+        <strong id="xpValue">0</strong>
+      </div>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="signalsProgressFill" style="width:0%"></div>
+    </div>
+
+    <div class="floating-buttons">
+      <button onclick="centerOnUser()">Center on me</button>
+      <button onclick="resetProgress()">Reset progress</button>
+    </div>
+
+    <div id="mapStatus" class="panel-sub panel-status">Move to a Signal to bring a district online.</div>
   </div>
-</div>
 
-<div id="map"></div>
-
-<div class="panel-floating">
-  <div class="panel-title">Signal Network</div>
-  <div id="signalText">0 / 3 Signals</div>
-
-  <div class="panel-sub">XP: <span id="xp">0</span></div>
-
-  <div class="progress-bar">
-    <div class="progress-fill" id="progress"></div>
+  <div class="panel-floating panel-floating-districts">
+    <div class="panel-title">District Progress</div>
+    <div class="panel-sub">Each district has its own Signal and pub completion</div>
+    <div id="districtList"></div>
   </div>
-</div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
+    import { signals } from "./signals.js";
+    import { districts, getDistrictById, getDistrictForPub } from "./districts.js";
 
-<script>
-/* ===========================
-   BASIC MAP
-=========================== */
-const map = L.map('map').setView([51.505, -0.12], 14);
+    const SIGNAL_RADIUS_METERS = 450;
+    const SIGNAL_UNLOCK_DISTANCE_METERS = 50;
 
-L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-).addTo(map);
+    const STORAGE_KEYS = {
+      signals: "pint_signal_unlocked_signals",
+      visited: "pint_signal_visited_pubs",
+      xp: "pint_signal_xp",
+      rare: "pint_signal_rare_assignments"
+    };
 
-/* ===========================
-   PLAYER STATE
-=========================== */
-let unlockedSignals = JSON.parse(localStorage.getItem("signals") || "[]");
-let visitedPubs = JSON.parse(localStorage.getItem("visited") || "[]");
-let xp = parseInt(localStorage.getItem("xp") || "0");
+    const state = {
+      unlockedSignals: new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.signals) || "[]")),
+      visitedPubs: new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.visited) || "[]")),
+      xp: Number(localStorage.getItem(STORAGE_KEYS.xp) || "0"),
+      rareAssignments: JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}")
+    };
 
-/* ===========================
-   SIGNALS (DISTRICT UNLOCK)
-=========================== */
-const signals = [
-  { id: 1, lat: 51.505, lng: -0.12 },
-  { id: 2, lat: 51.51,  lng: -0.135 },
-  { id: 3, lat: 51.498, lng: -0.11 }
-];
+    const map = L.map("map", {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([51.5007, -0.1290], 14);
 
-signals.forEach(s => {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: "&copy; OpenStreetMap & CARTO",
+      maxZoom: 19
+    }).addTo(map);
 
-  const marker = L.marker([s.lat, s.lng], {
-    icon: L.divIcon({
-      html: `
-        <div class="signal-marker">
-          <div class="signal-core">📡</div>
-          <div class="signal-ring signal-ring-1"></div>
-          <div class="signal-ring signal-ring-2"></div>
-        </div>
-      `,
-      className: ''
-    })
-  }).addTo(map);
+    let userPos = null;
+    let userMarker = null;
 
-  marker.on("click", () => {
+    let signalMarkers = [];
+    let signalRevealCircles = [];
+    let signalGlowCircles = [];
+    let districtLabels = [];
+    let pubMarkers = [];
 
-    if (!unlockedSignals.includes(s.id)) {
+    const signalsValueEl = document.getElementById("signalsValue");
+    const visiblePubsValueEl = document.getElementById("visiblePubsValue");
+    const xpValueEl = document.getElementById("xpValue");
+    const signalsProgressFillEl = document.getElementById("signalsProgressFill");
+    const mapStatusEl = document.getElementById("mapStatus");
+    const districtListEl = document.getElementById("districtList");
 
-      unlockedSignals.push(s.id);
-      localStorage.setItem("signals", JSON.stringify(unlockedSignals));
-
-      // 🔥 REWARD SYSTEM
-      xp += 50;
-      localStorage.setItem("xp", xp);
-
-      alert("Signal activated (+50 XP)");
-
-      renderPubs();
-      updateUI();
+    function saveState() {
+      localStorage.setItem(STORAGE_KEYS.signals, JSON.stringify([...state.unlockedSignals]));
+      localStorage.setItem(STORAGE_KEYS.visited, JSON.stringify([...state.visitedPubs]));
+      localStorage.setItem(STORAGE_KEYS.xp, String(state.xp));
+      localStorage.setItem(STORAGE_KEYS.rare, JSON.stringify(state.rareAssignments));
     }
-  });
 
-});
+    function getStoredCoords(pubId) {
+      const raw = localStorage.getItem(`pubcoords_${pubId}`);
+      if (!raw) return null;
 
-/* ===========================
-   PUB DATA (TEST SET)
-=========================== */
-const pubs = [
-  { id: 1, name: "The Admiralty", lat: 51.5075, lng: -0.128 },
-  { id: 2, name: "The Clarence", lat: 51.5033, lng: -0.127 },
-  { id: 3, name: "The Two Chairmen", lat: 51.4995, lng: -0.128 },
-  { id: 4, name: "The Red Lion", lat: 51.499, lng: -0.13 }
-];
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          !Number.isNaN(parsed.lat) &&
+          !Number.isNaN(parsed.lng)
+        ) {
+          return parsed;
+        }
+      } catch (error) {}
 
-/* ===========================
-   RARE SYSTEM
-=========================== */
-function getRarity() {
-  const r = Math.random();
-  if (r < 0.05) return "legendary";
-  if (r < 0.2) return "rare";
-  return "common";
-}
+      return null;
+    }
 
-/* ===========================
-   PUB RENDER
-=========================== */
-let pubMarkers = [];
+    function hasCoordinates(pub) {
+      return (
+        typeof pub.lat === "number" &&
+        typeof pub.lng === "number" &&
+        !Number.isNaN(pub.lat) &&
+        !Number.isNaN(pub.lng)
+      );
+    }
 
-function renderPubs() {
+    function getResolvedPubs() {
+      return westminsterPubs.map(pub => {
+        if (hasCoordinates(pub)) return pub;
 
-  // clear old
-  pubMarkers.forEach(m => map.removeLayer(m));
-  pubMarkers = [];
+        const stored = getStoredCoords(pub.id);
+        if (stored) {
+          return {
+            ...pub,
+            lat: stored.lat,
+            lng: stored.lng
+          };
+        }
 
-  // 🔥 REQUIRE SIGNAL TO SEE PUBS
-  if (unlockedSignals.length === 0) return;
+        return pub;
+      });
+    }
 
-  pubs.forEach(pub => {
+    function getPubRarity(pub) {
+      if (!state.rareAssignments[pub.id]) {
+        const hash = Array.from(pub.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
 
-    const rarity = getRarity();
-
-    const icon = L.divIcon({
-      html: `<div class="pint-marker">${rarity === "legendary" ? "🔥" : "🍺"}</div>`,
-      className: ''
-    });
-
-    const marker = L.marker([pub.lat, pub.lng], { icon }).addTo(map);
-
-    marker.on("click", () => {
-
-      if (!visitedPubs.includes(pub.id)) {
-        visitedPubs.push(pub.id);
-        localStorage.setItem("visited", JSON.stringify(visitedPubs));
-
-        let gain = 10;
-        if (rarity === "rare") gain = 25;
-        if (rarity === "legendary") gain = 50;
-
-        xp += gain;
-        localStorage.setItem("xp", xp);
-
-        alert(pub.name + " discovered! +" + gain + " XP");
-
-        updateUI();
+        if (hash < 5) {
+          state.rareAssignments[pub.id] = "legendary";
+        } else if (hash < 20) {
+          state.rareAssignments[pub.id] = "rare";
+        } else if (hash < 45) {
+          state.rareAssignments[pub.id] = "notable";
+        } else {
+          state.rareAssignments[pub.id] = "common";
+        }
       }
 
-    });
+      return state.rareAssignments[pub.id];
+    }
 
-    pubMarkers.push(marker);
-  });
-}
+    function getRarityXp(rarity) {
+      if (rarity === "legendary") return 60;
+      if (rarity === "rare") return 30;
+      if (rarity === "notable") return 18;
+      return 10;
+    }
 
-/* ===========================
-   UI UPDATE
-=========================== */
-function updateUI() {
+    function getRarityEmoji(rarity) {
+      if (rarity === "legendary") return "🔥";
+      if (rarity === "rare") return "✨";
+      if (rarity === "notable") return "⭐";
+      return "🍺";
+    }
 
-  document.getElementById("signalText").innerText =
-    unlockedSignals.length + " / " + signals.length + " Signals";
+    function signalIcon(unlocked, districtId) {
+      const district = getDistrictById(districtId);
 
-  document.getElementById("xp").innerText = xp;
+      return L.divIcon({
+        html: `
+          <div class="signal-marker ${unlocked ? "signal-unlocked" : "signal-locked"}" style="--signal-color:${district ? district.color : "#d4a24c"};">
+            <div class="signal-core">📡</div>
+            <div class="signal-ring signal-ring-1"></div>
+            <div class="signal-ring signal-ring-2"></div>
+          </div>
+        `,
+        className: "signal-marker-wrap",
+        iconSize: [54, 54],
+        iconAnchor: [27, 27]
+      });
+    }
 
-  const percent = (unlockedSignals.length / signals.length) * 100;
-  document.getElementById("progress").style.width = percent + "%";
-}
+    function pubIcon(pub, visited) {
+      const rarity = getPubRarity(pub);
 
-/* ===========================
-   INIT
-=========================== */
-renderPubs();
-updateUI();
+      return L.divIcon({
+        html: `
+          <div class="pint-marker-ac rarity-${rarity} ${visited ? "pub-visited" : ""}">
+            ${getRarityEmoji(rarity)}
+          </div>
+        `,
+        className: "pint-marker-wrap",
+        iconSize: [34, 34],
+        iconAnchor: [17, 24]
+      });
+    }
 
-</script>
+    function clearLayers(list) {
+      list.forEach(layer => map.removeLayer(layer));
+      list.length = 0;
+    }
 
+    function renderDistrictLabels() {
+      clearLayers(districtLabels);
+
+      districts.forEach(district => {
+        const label = L.marker([district.centerLat, district.centerLng], {
+          interactive: false,
+          icon: L.divIcon({
+            html: `<div class="district-label">${district.name}</div>`,
+            className: "district-label-wrap",
+            iconSize: [180, 28],
+            iconAnchor: [90, 14]
+          })
+        }).addTo(map);
+
+        districtLabels.push(label);
+      });
+    }
+
+    function renderSignals() {
+      clearLayers(signalMarkers);
+      clearLayers(signalRevealCircles);
+      clearLayers(signalGlowCircles);
+
+      signals.forEach(signal => {
+        const unlocked = state.unlockedSignals.has(signal.id);
+        const district = getDistrictById(signal.districtId);
+
+        if (unlocked) {
+          const glow = L.circle([signal.lat, signal.lng], {
+            radius: SIGNAL_RADIUS_METERS * 1.22,
+            stroke: false,
+            fillColor: district ? district.color : "#ffd27a",
+            fillOpacity: 0.05,
+            interactive: false
+          }).addTo(map);
+
+          const reveal = L.circle([signal.lat, signal.lng], {
+            radius: SIGNAL_RADIUS_METERS,
+            color: district ? district.color : "#ffcc73",
+            weight: 1,
+            fillColor: district ? district.color : "#ffcc73",
+            fillOpacity: 0.12,
+            interactive: false
+          }).addTo(map);
+
+          signalGlowCircles.push(glow);
+          signalRevealCircles.push(reveal);
+        }
+
+        const marker = L.marker([signal.lat, signal.lng], {
+          icon: signalIcon(unlocked, signal.districtId)
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width:190px;">
+            <strong>${signal.name}</strong><br>
+            ${district ? district.name : "District"}<br>
+            ${unlocked ? "Unlocked ✓" : "Locked"}<br>
+            ${unlocked ? "District online." : "Move within 50m to unlock."}
+          </div>
+        `);
+
+        marker.on("click", () => unlockSignal(signal));
+        signalMarkers.push(marker);
+      });
+    }
+
+    function isPubVisible(pub) {
+      return signals.some(signal => {
+        if (!state.unlockedSignals.has(signal.id)) return false;
+        return map.distance([pub.lat, pub.lng], [signal.lat, signal.lng]) <= SIGNAL_RADIUS_METERS;
+      });
+    }
+
+    function discoverPub(pub) {
+      if (state.visitedPubs.has(pub.id)) return;
+
+      const rarity = getPubRarity(pub);
+      const gain = getRarityXp(rarity);
+
+      state.visitedPubs.add(pub.id);
+      state.xp += gain;
+      saveState();
+
+      mapStatusEl.textContent = `${pub.name} discovered. +${gain} XP (${rarity})`;
+      renderAll();
+    }
+
+    function renderPubs() {
+      clearLayers(pubMarkers);
+
+      const pubs = getResolvedPubs();
+      const visiblePubs = pubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
+
+      visiblePubs.forEach(pub => {
+        const districtId = getDistrictForPub(pub);
+        const district = getDistrictById(districtId);
+        const rarity = getPubRarity(pub);
+        const visited = state.visitedPubs.has(pub.id);
+
+        const marker = L.marker([pub.lat, pub.lng], {
+          icon: pubIcon(pub, visited)
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width:210px;">
+            <strong>${pub.name}</strong><br>
+            ${district ? district.name : "District unknown"}<br>
+            ${pub.address || ""}<br>
+            Rarity: ${rarity}<br>
+            ${visited ? "Visited ✓" : "Tap to discover and open"}
+          </div>
+        `);
+
+        marker.on("click", () => {
+          if (!visited) {
+            discoverPub(pub);
+          }
+          window.location.href = `pub.html?id=${encodeURIComponent(pub.id)}`;
+        });
+
+        pubMarkers.push(marker);
+      });
+    }
+
+    function getVisiblePubs() {
+      return getResolvedPubs().filter(pub => hasCoordinates(pub) && isPubVisible(pub));
+    }
+
+    function getDistrictStats() {
+      const pubs = getResolvedPubs();
+
+      return districts.map(district => {
+        const districtSignals = signals.filter(signal => signal.districtId === district.id);
+        const districtPubs = pubs.filter(pub => getDistrictForPub(pub) === district.id);
+        const districtVisited = districtPubs.filter(pub => state.visitedPubs.has(pub.id));
+        const districtVisible = districtPubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
+        const unlockedCount = districtSignals.filter(signal => state.unlockedSignals.has(signal.id)).length;
+
+        return {
+          district,
+          totalSignals: districtSignals.length,
+          unlockedSignals: unlockedCount,
+          totalPubs: districtPubs.length,
+          visiblePubs: districtVisible.length,
+          visitedPubs: districtVisited.length,
+          online: unlockedCount > 0
+        };
+      });
+    }
+
+    function renderFloatingStats() {
+      const visiblePubs = getVisiblePubs();
+      const progress = signals.length ? (state.unlockedSignals.size / signals.length) * 100 : 0;
+
+      signalsValueEl.textContent = `${state.unlockedSignals.size} / ${signals.length}`;
+      visiblePubsValueEl.textContent = String(visiblePubs.length);
+      xpValueEl.textContent = String(state.xp);
+      signalsProgressFillEl.style.width = `${progress}%`;
+    }
+
+    function renderDistrictList() {
+      const stats = getDistrictStats();
+
+      districtListEl.innerHTML = stats.map(item => {
+        const percent = item.totalPubs ? (item.visitedPubs / item.totalPubs) * 100 : 0;
+
+        return `
+          <div class="district-row">
+            <div class="district-row-top">
+              <div class="district-name-wrap">
+                <span class="district-dot" style="background:${item.district.color};"></span>
+                <strong>${item.district.name}</strong>
+              </div>
+              <span class="district-status ${item.online ? "district-online" : "district-offline"}">
+                ${item.online ? "Online" : "Locked"}
+              </span>
+            </div>
+
+            <div class="district-meta">
+              Signals ${item.unlockedSignals}/${item.totalSignals} · Visited ${item.visitedPubs}/${item.totalPubs}
+            </div>
+
+            <div class="district-progress-bar">
+              <div
+                class="district-progress-fill"
+                style="width:${percent}%; background:${item.district.color};"
+              ></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderAll() {
+      renderDistrictLabels();
+      renderSignals();
+      renderPubs();
+      renderFloatingStats();
+      renderDistrictList();
+    }
+
+    function unlockSignal(signal) {
+      if (!userPos) {
+        mapStatusEl.textContent = "Enable location to activate Signals.";
+        return;
+      }
+
+      const distance = map.distance(userPos, [signal.lat, signal.lng]);
+
+      if (distance > SIGNAL_UNLOCK_DISTANCE_METERS) {
+        mapStatusEl.textContent = `${signal.name} is ${Math.round(distance)}m away.`;
+        return;
+      }
+
+      if (!state.unlockedSignals.has(signal.id)) {
+        state.unlockedSignals.add(signal.id);
+        state.xp += 50;
+        saveState();
+
+        const district = getDistrictById(signal.districtId);
+        mapStatusEl.textContent = `${signal.name} unlocked. ${district ? district.name : "District"} online. +50 XP`;
+        renderAll();
+      } else {
+        mapStatusEl.textContent = `${signal.name} is already online.`;
+      }
+    }
+
+    navigator.geolocation.watchPosition(
+      pos => {
+        userPos = [pos.coords.latitude, pos.coords.longitude];
+
+        if (!userMarker) {
+          userMarker = L.marker(userPos).addTo(map).bindPopup("You are here");
+        } else {
+          userMarker.setLatLng(userPos);
+        }
+      },
+      () => {
+        mapStatusEl.textContent = "Location unavailable. Signals require location access.";
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 10000
+      }
+    );
+
+    function centerOnUser() {
+      if (userPos) {
+        map.setView(userPos, 16);
+      }
+    }
+
+    function resetProgress() {
+      localStorage.removeItem(STORAGE_KEYS.signals);
+      localStorage.removeItem(STORAGE_KEYS.visited);
+      localStorage.removeItem(STORAGE_KEYS.xp);
+      localStorage.removeItem(STORAGE_KEYS.rare);
+
+      state.unlockedSignals = new Set();
+      state.visitedPubs = new Set();
+      state.xp = 0;
+      state.rareAssignments = {};
+
+      mapStatusEl.textContent = "Progress reset.";
+      renderAll();
+    }
+
+    window.centerOnUser = centerOnUser;
+    window.resetProgress = resetProgress;
+
+    renderAll();
+  </script>
 </body>
 </html>
