@@ -8,14 +8,27 @@
 <body>
   <h1>Pint Signal 🍺</h1>
 
-  <button onclick="addPub()">Add Test Pub</button>
+  <div class="button-row">
+    <button onclick="seedPubs()">Load Westminster Pubs</button>
+    <button onclick="clearListOnly()">Refresh List</button>
+  </div>
 
   <ul id="pubList"></ul>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      query,
+      where
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    import {
+      getAuth,
+      signInAnonymously
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
@@ -29,8 +42,45 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
-
     const pubList = document.getElementById("pubList");
+
+    const westminsterPubs = [
+      {
+        name: "Two Chairmen",
+        area: "Westminster",
+        lat: 51.5006512,
+        lng: -0.1316484,
+        tags: ["historic", "classic"]
+      },
+      {
+        name: "Buckingham Arms",
+        area: "Westminster",
+        lat: 51.4991812,
+        lng: -0.1368225,
+        tags: ["ale", "local"]
+      },
+      {
+        name: "The Red Lion, Parliament Street",
+        area: "Westminster",
+        lat: 51.5020777,
+        lng: -0.1257325,
+        tags: ["politics", "iconic"]
+      },
+      {
+        name: "St Stephen's Tavern",
+        area: "Westminster",
+        lat: 51.5011626,
+        lng: -0.1256042,
+        tags: ["tourist", "historic"]
+      },
+      {
+        name: "Westminster Arms",
+        area: "Westminster",
+        lat: 51.5005932,
+        lng: -0.1297727,
+        tags: ["ale", "classic"]
+      }
+    ];
 
     await signInAnonymously(auth);
 
@@ -39,24 +89,60 @@
 
       const snapshot = await getDocs(collection(db, "pubs"));
 
-      snapshot.forEach(doc => {
+      if (snapshot.empty) {
         const li = document.createElement("li");
-        li.textContent = doc.data().name;
+        li.textContent = "No pubs loaded yet.";
+        pubList.appendChild(li);
+        return;
+      }
+
+      snapshot.forEach((doc) => {
+        const pub = doc.data();
+
+        const li = document.createElement("li");
+        li.className = "pub-item";
+
+        const title = document.createElement("div");
+        title.className = "pub-name";
+        title.textContent = pub.name || "Unnamed pub";
+
+        const meta = document.createElement("div");
+        meta.className = "pub-meta";
+        meta.textContent = `${pub.area || "Unknown area"} • ${Array.isArray(pub.tags) ? pub.tags.join(", ") : ""}`;
+
+        li.appendChild(title);
+        li.appendChild(meta);
         pubList.appendChild(li);
       });
     }
 
-    async function addPub() {
-      await addDoc(collection(db, "pubs"), {
-        name: "Test Pub " + Math.floor(Math.random() * 100)
-      });
-
-      loadPubs();
+    async function pubExistsByName(name) {
+      const pubsRef = collection(db, "pubs");
+      const q = query(pubsRef, where("name", "==", name));
+      const snapshot = await getDocs(q);
+      return !snapshot.empty;
     }
 
-    window.addPub = addPub;
+    async function seedPubs() {
+      for (const pub of westminsterPubs) {
+        const exists = await pubExistsByName(pub.name);
 
-    loadPubs();
+        if (!exists) {
+          await addDoc(collection(db, "pubs"), pub);
+        }
+      }
+
+      await loadPubs();
+    }
+
+    async function clearListOnly() {
+      await loadPubs();
+    }
+
+    window.seedPubs = seedPubs;
+    window.clearListOnly = clearListOnly;
+
+    await loadPubs();
   </script>
 </body>
 </html>
