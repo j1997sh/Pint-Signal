@@ -544,6 +544,68 @@ button:hover {
   gap: 15px;
 }
 
+.back-link {
+  display: inline-block;
+  margin-bottom: 12px;
+  text-decoration: none;
+  color: #333;
+  font-size: 14px;
+}
+
+.pub-hero-card {
+  background: linear-gradient(180deg, #fffdf8 0%, #fff7e8 100%);
+  border: 1px solid #f0e3c2;
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.pub-hero-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pub-hero-emoji {
+  font-size: 34px;
+}
+
+.pub-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.pub-chip {
+  font-size: 12px;
+  font-weight: 700;
+  background: #f3f3f6;
+  color: #555;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mini-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.form-card {
+  margin-top: 14px;
+}
+
+.form-status {
+  margin-top: 10px;
+}
+
 @media (max-width: 700px) {
   .topbar-inner {
     flex-direction: column;
@@ -559,7 +621,8 @@ button:hover {
 
   .two-column,
   .form-grid,
-  .passport-grid {
+  .passport-grid,
+  .action-grid {
     grid-template-columns: 1fr;
   }
 
