@@ -26,6 +26,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .brand-title {
@@ -61,7 +62,7 @@ body {
 }
 
 .page-narrow {
-  max-width: 700px;
+  max-width: 760px;
 }
 
 .panel {
@@ -271,7 +272,39 @@ button:hover {
   font-size: 22px;
 }
 
-/* money split */
+.totaliser-card {
+  background: #fcfcff;
+  border: 1px solid #ececf3;
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.totaliser-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.simple-split-bar {
+  display: flex;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #ececf1;
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+
+.simple-split-gov {
+  background: #ff3b30;
+}
+
+.simple-split-pub {
+  background: #34c759;
+}
+
 .awareness-result {
   margin-top: 14px;
 }
@@ -323,7 +356,10 @@ button:hover {
   font-size: 14px;
 }
 
-.money-legend-item span:first-of-type {
+.money-legend-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
 }
 
@@ -332,7 +368,6 @@ button:hover {
   height: 12px;
   border-radius: 999px;
   display: inline-block;
-  margin-right: 8px;
 }
 
 .breakdown-grid {
@@ -372,6 +407,11 @@ button:hover {
   border-radius: 12px;
 }
 
+.comparison-line.compact {
+  margin-top: 8px;
+  padding: 10px 12px;
+}
+
 .calculator-note {
   margin-top: 10px;
   font-size: 12px;
@@ -387,7 +427,6 @@ button:hover {
   padding: 10px;
 }
 
-/* passport */
 .passport-summary-card {
   background: #fffdf7;
   border-radius: 16px;
