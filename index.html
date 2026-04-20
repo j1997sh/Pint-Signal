@@ -15,47 +15,103 @@
   />
 </head>
 <body>
-  <div class="page">
-    <header class="hero">
-      <h1>Pint Signal 🍺</h1>
-      <p class="subtitle">Live pub map for Westminster</p>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-title">Pint Signal 🍺</div>
+          <div class="brand-subtitle">Westminster pub map, prices, and check-ins</div>
+        </div>
+
+        <nav class="menu">
+          <a href="#mapSection">Map</a>
+          <a href="#nearbySection">Cheapest Nearby</a>
+          <a href="#detailsSection">Pub Details</a>
+          <a href="#historySection">Pint History</a>
+          <a href="#activitySection">Activity</a>
+        </nav>
+      </div>
     </header>
 
-    <section class="controls">
-      <button onclick="loadWestminsterPubs()">Load Westminster Pubs</button>
-      <button onclick="refreshPubs()">Refresh Pubs</button>
-      <button onclick="centerOnUser()">Center On Me</button>
-    </section>
+    <main class="page">
+      <section class="controls-card">
+        <div class="controls">
+          <button onclick="loadWestminsterPubs()">Load Westminster Pubs</button>
+          <button onclick="refreshAll()">Refresh Everything</button>
+          <button onclick="centerOnUser()">Center On Me</button>
+        </div>
 
-    <section class="status-wrap">
-      <div id="status">Loading map...</div>
-    </section>
+        <div class="status-wrap">
+          <div id="status">Loading map...</div>
+        </div>
+      </section>
 
-    <section class="map-wrap">
-      <div id="map"></div>
-    </section>
+      <section id="mapSection" class="panel">
+        <div class="panel-header">
+          <h2>Map</h2>
+          <p>Live location and nearby pubs</p>
+        </div>
+        <div class="map-wrap">
+          <div id="map"></div>
+        </div>
+      </section>
 
-    <section class="selected-wrap">
-      <h2>Selected Pub</h2>
-      <div id="selectedPubPanel" class="selected-panel empty">
-        Tap a pub marker or pub card to select a pub.
-      </div>
-    </section>
+      <section id="nearbySection" class="panel">
+        <div class="panel-header">
+          <h2>Cheapest Nearby Pint</h2>
+          <p>Based on the latest submitted pint price at each pub near you</p>
+        </div>
+        <div id="cheapestNearbyPanel" class="info-panel empty">
+          Allow location to see the cheapest nearby pint.
+        </div>
+      </section>
 
-    <section class="list-wrap">
-      <h2>Pubs</h2>
-      <div id="pubList" class="pub-list"></div>
-    </section>
+      <section id="detailsSection" class="panel">
+        <div class="panel-header">
+          <h2>Pub Details</h2>
+          <p>Select a pub marker or pub card</p>
+        </div>
+        <div id="selectedPubPanel" class="info-panel empty">
+          Tap a pub marker or pub card to select a pub.
+        </div>
+      </section>
 
-    <section class="list-wrap">
-      <h2>Recent Check-Ins</h2>
-      <div id="checkinList" class="checkin-list"></div>
-    </section>
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Pubs</h2>
+          <p>All loaded pubs, sorted by distance when location is available</p>
+        </div>
+        <div id="pubList" class="pub-list"></div>
+      </section>
 
-    <section class="list-wrap">
-      <h2>Recent Pint Prices</h2>
-      <div id="priceList" class="price-list"></div>
-    </section>
+      <section id="historySection" class="panel">
+        <div class="panel-header">
+          <h2>Pint History</h2>
+          <p>Recent submitted prices for the currently selected pub</p>
+        </div>
+        <div id="selectedPubHistoryPanel" class="history-list empty-state">
+          Select a pub to see price history.
+        </div>
+      </section>
+
+      <section id="activitySection" class="panel two-column">
+        <div>
+          <div class="panel-header">
+            <h2>Recent Check-Ins</h2>
+            <p>Latest visits from users</p>
+          </div>
+          <div id="checkinList" class="stack-list"></div>
+        </div>
+
+        <div>
+          <div class="panel-header">
+            <h2>Recent Pint Prices</h2>
+            <p>Latest submitted pint prices</p>
+          </div>
+          <div id="priceList" class="stack-list"></div>
+        </div>
+      </section>
+    </main>
   </div>
 
   <script
@@ -92,6 +148,7 @@
 
     const CHECKIN_RADIUS_METERS = 50;
     const CHECKIN_COOLDOWN_MINUTES = 60;
+    const NEARBY_RADIUS_METERS = 1200;
 
     const westminsterPubs = [
       {
@@ -138,6 +195,8 @@
     const statusEl = document.getElementById("status");
     const pubListEl = document.getElementById("pubList");
     const selectedPubPanelEl = document.getElementById("selectedPubPanel");
+    const selectedPubHistoryPanelEl = document.getElementById("selectedPubHistoryPanel");
+    const cheapestNearbyPanelEl = document.getElementById("cheapestNearbyPanel");
     const checkinListEl = document.getElementById("checkinList");
     const priceListEl = document.getElementById("priceList");
 
@@ -199,18 +258,28 @@
 
     function formatPrice(value) {
       const numberValue = Number(value);
-      if (Number.isNaN(numberValue)) {
-        return "£0.00";
-      }
+      if (Number.isNaN(numberValue)) return "£0.00";
       return `£${numberValue.toFixed(2)}`;
     }
 
-    function initMap() {
-      map = L.map("map").setView([51.5007, -0.1290], 15);
+    function createPintIcon() {
+      return L.divIcon({
+        html: '<div class="pint-marker-inner">🍺</div>',
+        className: "pint-marker",
+        iconSize: [34, 34],
+        iconAnchor: [17, 28],
+        popupAnchor: [0, -24]
+      });
+    }
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors"
+    function initMap() {
+      map = L.map("map", {
+        zoomControl: true
+      }).setView([51.5007, -0.1290], 15);
+
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap & CARTO",
+        maxZoom: 19
       }).addTo(map);
 
       setStatus("Map loaded. Signing in...");
@@ -249,10 +318,92 @@
       return snapshot.docs[0].data();
     }
 
+    async function getPriceHistoryForPub(pubId) {
+      const q = query(
+        collection(db, "prices"),
+        where("pubId", "==", pubId),
+        orderBy("createdAtMs", "desc"),
+        limit(10)
+      );
+
+      const snapshot = await getDocs(q);
+      const prices = [];
+
+      snapshot.forEach(doc => {
+        prices.push(doc.data());
+      });
+
+      return prices;
+    }
+
+    async function buildCheapestNearby() {
+      if (!userLatLng) {
+        cheapestNearbyPanelEl.className = "info-panel empty";
+        cheapestNearbyPanelEl.innerHTML = "Allow location to see the cheapest nearby pint.";
+        return;
+      }
+
+      if (allPubs.length === 0) {
+        cheapestNearbyPanelEl.className = "info-panel empty";
+        cheapestNearbyPanelEl.innerHTML = "No pubs loaded yet.";
+        return;
+      }
+
+      const candidates = [];
+
+      for (const pub of allPubs) {
+        const distance = getDistanceToPub(pub);
+
+        if (distance === null || distance > NEARBY_RADIUS_METERS) {
+          continue;
+        }
+
+        const latestPrice = await getLatestPriceForPub(pub.id);
+
+        if (latestPrice && typeof latestPrice.price !== "undefined") {
+          candidates.push({
+            pub,
+            distance,
+            latestPrice
+          });
+        }
+      }
+
+      if (candidates.length === 0) {
+        cheapestNearbyPanelEl.className = "info-panel empty";
+        cheapestNearbyPanelEl.innerHTML = `No nearby pint prices yet within ${NEARBY_RADIUS_METERS}m.`;
+        return;
+      }
+
+      candidates.sort((a, b) => Number(a.latestPrice.price) - Number(b.latestPrice.price));
+
+      const winner = candidates[0];
+
+      cheapestNearbyPanelEl.className = "info-panel";
+      cheapestNearbyPanelEl.innerHTML = `
+        <div class="nearby-winner">
+          <div class="nearby-badge">Cheapest Nearby</div>
+          <div class="nearby-title">${winner.pub.name}</div>
+          <div class="nearby-price">${winner.latestPrice.drinkName} • ${formatPrice(winner.latestPrice.price)}</div>
+          <div class="nearby-meta">
+            ${formatDistance(winner.distance)} • ${winner.pub.area} • ${winner.pub.tags.join(", ")}
+          </div>
+          <div class="nearby-meta">
+            ${winner.latestPrice.note ? winner.latestPrice.note + " • " : ""}${formatTimeAgo(winner.latestPrice.createdAtMs)}
+          </div>
+          <div class="selected-actions">
+            <button onclick="focusPubById('${winner.pub.id}')">View This Pub</button>
+          </div>
+        </div>
+      `;
+    }
+
     async function renderSelectedPub() {
       if (!selectedPub) {
-        selectedPubPanelEl.className = "selected-panel empty";
+        selectedPubPanelEl.className = "info-panel empty";
         selectedPubPanelEl.innerHTML = "Tap a pub marker or pub card to select a pub.";
+        selectedPubHistoryPanelEl.className = "history-list empty-state";
+        selectedPubHistoryPanelEl.innerHTML = "Select a pub to see price history.";
         return;
       }
 
@@ -280,7 +431,7 @@
           </div>
         `;
 
-      selectedPubPanelEl.className = "selected-panel";
+      selectedPubPanelEl.className = "info-panel";
       selectedPubPanelEl.innerHTML = `
         <div class="selected-title">${selectedPub.name}</div>
         <div class="selected-meta">${selectedPub.area} • ${(selectedPub.tags || []).join(", ")}</div>
@@ -323,15 +474,46 @@
           </div>
         </div>
       `;
+
+      const history = await getPriceHistoryForPub(selectedPub.id);
+
+      if (history.length === 0) {
+        selectedPubHistoryPanelEl.className = "history-list empty-state";
+        selectedPubHistoryPanelEl.innerHTML = "No price history for this pub yet.";
+        return;
+      }
+
+      selectedPubHistoryPanelEl.className = "history-list";
+      selectedPubHistoryPanelEl.innerHTML = "";
+
+      history.forEach(entry => {
+        const item = document.createElement("div");
+        item.className = "history-item";
+
+        item.innerHTML = `
+          <div class="history-title">${entry.drinkName} • ${formatPrice(entry.price)}</div>
+          <div class="history-meta">${entry.note ? entry.note + " • " : ""}${formatTimeAgo(entry.createdAtMs)}</div>
+        `;
+
+        selectedPubHistoryPanelEl.appendChild(item);
+      });
     }
 
     function selectPub(pub, zoomToMap = true) {
       selectedPub = pub;
       renderSelectedPub();
+      renderPubList(allPubs);
 
       if (zoomToMap) {
         map.setView([pub.lat, pub.lng], 17);
       }
+    }
+
+    function focusPubById(pubId) {
+      const pub = allPubs.find(item => item.id === pubId);
+      if (!pub) return;
+      selectPub(pub, true);
+      window.location.hash = "#detailsSection";
     }
 
     function renderPubList(pubs) {
@@ -386,7 +568,6 @@
 
         card.addEventListener("click", () => {
           selectPub(pub, true);
-          renderPubList(allPubs);
         });
 
         pubListEl.appendChild(card);
@@ -400,7 +581,9 @@
         const distance = getDistanceToPub(pub);
         const distanceText = distance !== null ? `<br><strong>${formatDistance(distance)}</strong>` : "";
 
-        const marker = L.marker([pub.lat, pub.lng]).addTo(map);
+        const marker = L.marker([pub.lat, pub.lng], {
+          icon: createPintIcon()
+        }).addTo(map);
 
         marker.bindPopup(`
           <div style="min-width: 180px;">
@@ -413,7 +596,6 @@
 
         marker.on("click", () => {
           selectPub(pub, false);
-          renderPubList(allPubs);
         });
 
         pubMarkers.push(marker);
@@ -440,18 +622,13 @@
         const data = doc.data();
 
         const card = document.createElement("div");
-        card.className = "checkin-card";
+        card.className = "stack-card";
 
-        const title = document.createElement("div");
-        title.className = "checkin-title";
-        title.textContent = data.pubName || "Unknown pub";
+        card.innerHTML = `
+          <div class="stack-title">${data.pubName || "Unknown pub"}</div>
+          <div class="stack-meta">User ${String(data.userId || "").slice(0, 8)} • ${formatTimeAgo(data.createdAtMs || Date.now())}</div>
+        `;
 
-        const meta = document.createElement("div");
-        meta.className = "checkin-meta";
-        meta.textContent = `User ${String(data.userId || "").slice(0, 8)} • ${formatTimeAgo(data.createdAtMs || Date.now())}`;
-
-        card.appendChild(title);
-        card.appendChild(meta);
         checkinListEl.appendChild(card);
       });
     }
@@ -476,23 +653,14 @@
         const data = doc.data();
 
         const card = document.createElement("div");
-        card.className = "price-card";
+        card.className = "stack-card";
 
-        const title = document.createElement("div");
-        title.className = "price-title";
-        title.textContent = `${data.pubName || "Unknown pub"} • ${data.drinkName || "Drink"}`;
+        card.innerHTML = `
+          <div class="stack-title">${data.pubName || "Unknown pub"} • ${data.drinkName || "Drink"}</div>
+          <div class="stack-price">${formatPrice(data.price)}</div>
+          <div class="stack-meta">${data.note ? data.note + " • " : ""}${formatTimeAgo(data.createdAtMs || Date.now())}</div>
+        `;
 
-        const price = document.createElement("div");
-        price.className = "price-main";
-        price.textContent = formatPrice(data.price);
-
-        const meta = document.createElement("div");
-        meta.className = "price-meta";
-        meta.textContent = `${data.note ? data.note + " • " : ""}${formatTimeAgo(data.createdAtMs || Date.now())}`;
-
-        card.appendChild(title);
-        card.appendChild(price);
-        card.appendChild(meta);
         priceListEl.appendChild(card);
       });
     }
@@ -535,6 +703,7 @@
       renderPubMarkers(pubs);
       renderPubList(pubs);
       await renderSelectedPub();
+      await buildCheapestNearby();
 
       setStatus(`Loaded ${pubs.length} pub${pubs.length === 1 ? "" : "s"}.`);
     }
@@ -551,21 +720,21 @@
           }
         }
 
-        await loadPubsFromFirestore();
+        await refreshAll();
       } catch (error) {
         console.error(error);
         setStatus(`Could not add pubs: ${error.message}`);
       }
     }
 
-    async function refreshPubs() {
+    async function refreshAll() {
       try {
         await loadPubsFromFirestore();
         await renderRecentCheckins();
         await renderRecentPrices();
       } catch (error) {
         console.error(error);
-        setStatus(`Could not refresh pubs: ${error.message}`);
+        setStatus(`Could not refresh: ${error.message}`);
       }
     }
 
@@ -581,9 +750,10 @@
       if (!accuracyCircle) {
         accuracyCircle = L.circle([lat, lng], {
           radius: accuracy,
-          color: "#2f80ed",
-          fillColor: "#2f80ed",
-          fillOpacity: 0.12
+          color: "#5b8def",
+          fillColor: "#5b8def",
+          fillOpacity: 0.10,
+          weight: 2
         }).addTo(map);
       } else {
         accuracyCircle.setLatLng([lat, lng]);
@@ -593,6 +763,7 @@
       renderPubMarkers(allPubs);
       renderPubList(allPubs);
       renderSelectedPub();
+      buildCheapestNearby();
     }
 
     function startLiveLocation() {
@@ -747,6 +918,11 @@
       const priceValueInput = document.getElementById("priceValue");
       const priceNoteInput = document.getElementById("priceNote");
 
+      if (!drinkNameInput || !priceValueInput || !priceNoteInput) {
+        setStatus("Price form is not ready yet.");
+        return;
+      }
+
       const drinkName = drinkNameInput.value.trim();
       const note = priceNoteInput.value.trim();
       const price = Number(priceValueInput.value);
@@ -784,6 +960,7 @@
         setStatus(`Submitted ${drinkName} at ${formatPrice(price)} for ${selectedPub.name}.`);
         await renderSelectedPub();
         await renderRecentPrices();
+        await buildCheapestNearby();
       } catch (error) {
         console.error(error);
         setStatus(`Price submission failed: ${error.message}`);
@@ -791,10 +968,11 @@
     }
 
     window.loadWestminsterPubs = loadWestminsterPubs;
-    window.refreshPubs = refreshPubs;
+    window.refreshAll = refreshAll;
     window.centerOnUser = centerOnUser;
     window.checkInSelectedPub = checkInSelectedPub;
     window.submitPriceForSelectedPub = submitPriceForSelectedPub;
+    window.focusPubById = focusPubById;
 
     async function startApp() {
       try {
@@ -802,9 +980,7 @@
         const authResult = await signInAnonymously(auth);
         currentUser = authResult.user;
         setStatus("Signed in. Loading pubs...");
-        await loadPubsFromFirestore();
-        await renderRecentCheckins();
-        await renderRecentPrices();
+        await refreshAll();
         startLiveLocation();
       } catch (error) {
         console.error(error);
