@@ -13,7 +13,9 @@
 
 <main class="page">
 
-<div id="pub"></div>
+<div id="hero" class="card big"></div>
+
+<button onclick="checkIn()">Check In</button>
 
 <h3>Submit Price</h3>
 <input id="drink" placeholder="Drink">
@@ -31,54 +33,60 @@ import { getFirestore, doc, getDoc, collection, addDoc, query, where, orderBy, g
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
 const app = initializeApp({
-  apiKey:"AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+  apiKey:"AIzaSyB...",
   authDomain:"pintsignal.firebaseapp.com",
   projectId:"pintsignal"
 });
 
-const db = getFirestore(app);
-const auth = getAuth(app);
+const db=getFirestore(app);
+const auth=getAuth(app);
 
-const id = new URLSearchParams(location.search).get("id");
+const id=new URLSearchParams(location.search).get("id");
 
 let user;
 
 async function load(){
-  const u = await signInAnonymously(auth);
-  user = u.user;
+  const u=await signInAnonymously(auth);
+  user=u.user;
 
-  const d = await getDoc(doc(db,"pubs",id));
-  const p = d.data();
+  const d=await getDoc(doc(db,"pubs",id));
+  const p=d.data();
 
-  document.getElementById("pub").innerHTML = `
-    <h2>${p.name}</h2>
-    ${p.area}
-  `;
+  document.getElementById("hero").innerHTML=
+    `<h2>${p.name}</h2>${p.area}`;
 
-  const q = query(collection(db,"prices"),where("pubId","==",id),orderBy("createdAtMs","desc"));
-  const s = await getDocs(q);
+  const q=query(collection(db,"prices"),where("pubId","==",id),orderBy("createdAtMs","desc"));
+  const s=await getDocs(q);
 
   s.forEach(doc=>{
-    const d = doc.data();
-    const div = document.createElement("div");
+    const d=doc.data();
+    const div=document.createElement("div");
     div.className="card";
     div.innerHTML=`${d.drinkName} £${d.price}`;
     document.getElementById("history").appendChild(div);
   });
 }
 
-window.submit = async ()=>{
+window.submit=async()=>{
   await addDoc(collection(db,"prices"),{
     pubId:id,
     userId:user.uid,
-    drinkName:document.getElementById("drink").value,
-    price:Number(document.getElementById("price").value),
+    drinkName:drink.value,
+    price:Number(price.value),
     createdAtMs:Date.now()
   });
-
   alert("+15 XP");
   location.reload();
-}
+};
+
+window.checkIn=async()=>{
+  await addDoc(collection(db,"checkins"),{
+    pubId:id,
+    userId:user.uid,
+    createdAtMs:Date.now()
+  });
+  alert("+10 XP");
+};
 
 load();
 </script>
