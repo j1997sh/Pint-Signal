@@ -12,7 +12,7 @@
     <div class="topbar-inner">
       <div>
         <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Signal Network</div>
+        <div class="brand-subtitle">District Signal Network</div>
       </div>
 
       <nav class="menu">
@@ -27,7 +27,7 @@
     <section class="panel map-panel">
       <div class="panel-header">
         <h2>Signal Network</h2>
-        <p>Activate Signals to reveal pubs across Westminster</p>
+        <p>Unlock districts, reveal pubs, and expand across Westminster</p>
       </div>
 
       <div class="map-shell">
@@ -41,17 +41,16 @@
       </div>
 
       <div id="mapStatus" class="stack-meta top-gap">
-        Move to a Signal to bring part of the city online.
+        Move to a Signal to bring a district online.
       </div>
     </section>
 
     <section class="panel">
       <div class="panel-header">
-        <h2>Network Status</h2>
-        <p>Your current exploration state</p>
+        <h2>District Progress</h2>
+        <p>Each district has its own Signal and pub completion</p>
       </div>
-
-      <div id="networkCard" class="totaliser-card">Loading...</div>
+      <div id="districtCard" class="totaliser-card">Loading districts...</div>
     </section>
   </main>
 
@@ -59,19 +58,8 @@
 
   <script type="module">
     import { westminsterPubs } from "./westminster-pubs.js";
-
-    const signals = [
-      { id: "parliament", name: "Parliament Signal", lat: 51.4995, lng: -0.1248 },
-      { id: "trafalgar", name: "Trafalgar Signal", lat: 51.5080, lng: -0.1281 },
-      { id: "bridge", name: "Bridge Signal", lat: 51.5009, lng: -0.1217 },
-      { id: "green", name: "Green Park Signal", lat: 51.5065, lng: -0.1426 },
-      { id: "buckingham", name: "Palace Signal", lat: 51.5014, lng: -0.1419 },
-      { id: "leicester", name: "Leicester Signal", lat: 51.5113, lng: -0.1281 },
-      { id: "soho", name: "Soho Signal", lat: 51.5136, lng: -0.1365 },
-      { id: "waterloo", name: "Waterloo Signal", lat: 51.5033, lng: -0.1147 },
-      { id: "vauxhall", name: "Vauxhall Signal", lat: 51.4866, lng: -0.1225 },
-      { id: "victoria", name: "Victoria Signal", lat: 51.4952, lng: -0.1442 }
-    ];
+    import { signals } from "./signals.js";
+    import { districts, getDistrictById, getDistrictForPub } from "./districts.js";
 
     const SIGNAL_RADIUS = 450;
     const UNLOCK_DISTANCE = 50;
@@ -89,9 +77,10 @@
     let signalMarkers = [];
     let signalRevealCircles = [];
     let signalGlowCircles = [];
+    let districtLabels = [];
     let pubMarkers = [];
 
-    const networkCardEl = document.getElementById("networkCard");
+    const districtCardEl = document.getElementById("districtCard");
     const mapStatusEl = document.getElementById("mapStatus");
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
@@ -144,10 +133,12 @@
       });
     }
 
-    function signalIcon(unlocked) {
+    function signalIcon(unlocked, districtId) {
+      const district = getDistrictById(districtId);
+
       return L.divIcon({
         html: `
-          <div class="signal-marker ${unlocked ? "signal-unlocked" : "signal-locked"}">
+          <div class="signal-marker ${unlocked ? "signal-unlocked" : "signal-locked"}" style="--signal-color:${district ? district.color : "#d4a24c"};">
             <div class="signal-core">📡</div>
             <div class="signal-ring signal-ring-1"></div>
             <div class="signal-ring signal-ring-2"></div>
@@ -168,33 +159,52 @@
       });
     }
 
-    function clearMarkers(list) {
+    function clearLayers(list) {
       list.forEach(layer => map.removeLayer(layer));
       list.length = 0;
     }
 
+    function renderDistrictLabels() {
+      clearLayers(districtLabels);
+
+      districts.forEach(district => {
+        const label = L.marker([district.centerLat, district.centerLng], {
+          interactive: false,
+          icon: L.divIcon({
+            html: `<div class="district-label">${district.name}</div>`,
+            className: "district-label-wrap",
+            iconSize: [180, 28],
+            iconAnchor: [90, 14]
+          })
+        }).addTo(map);
+
+        districtLabels.push(label);
+      });
+    }
+
     function renderSignals() {
-      clearMarkers(signalMarkers);
-      clearMarkers(signalRevealCircles);
-      clearMarkers(signalGlowCircles);
+      clearLayers(signalMarkers);
+      clearLayers(signalRevealCircles);
+      clearLayers(signalGlowCircles);
 
       signals.forEach(signal => {
         const unlocked = unlockedSignals.has(signal.id);
+        const district = getDistrictById(signal.districtId);
 
         if (unlocked) {
           const glow = L.circle([signal.lat, signal.lng], {
-            radius: SIGNAL_RADIUS * 1.25,
+            radius: SIGNAL_RADIUS * 1.22,
             stroke: false,
-            fillColor: "#ffd27a",
+            fillColor: district ? district.color : "#ffd27a",
             fillOpacity: 0.05,
             interactive: false
           }).addTo(map);
 
           const reveal = L.circle([signal.lat, signal.lng], {
             radius: SIGNAL_RADIUS,
-            color: "#ffcc73",
+            color: district ? district.color : "#ffcc73",
             weight: 1,
-            fillColor: "#ffcc73",
+            fillColor: district ? district.color : "#ffcc73",
             fillOpacity: 0.12,
             interactive: false
           }).addTo(map);
@@ -204,14 +214,15 @@
         }
 
         const marker = L.marker([signal.lat, signal.lng], {
-          icon: signalIcon(unlocked)
+          icon: signalIcon(unlocked, signal.districtId)
         }).addTo(map);
 
         marker.bindPopup(`
           <div style="min-width: 190px;">
             <strong>${signal.name}</strong><br>
+            ${district ? district.name : "District"}<br>
             ${unlocked ? "Unlocked ✓" : "Locked"}<br>
-            ${unlocked ? "Area online." : "Move within 50m to unlock."}
+            ${unlocked ? "District online." : "Move within 50m to unlock."}
           </div>
         `);
 
@@ -229,7 +240,7 @@
     }
 
     function renderPubs() {
-      clearMarkers(pubMarkers);
+      clearLayers(pubMarkers);
 
       const pubs = getResolvedPubs();
       const visiblePubs = pubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
@@ -239,11 +250,14 @@
           icon: pubIcon()
         }).addTo(map);
 
+        const districtId = getDistrictForPub(pub);
+        const district = getDistrictById(districtId);
+
         marker.bindPopup(`
           <div style="min-width: 190px;">
             <strong>${pub.name}</strong><br>
+            ${district ? district.name : "District unknown"}<br>
             ${pub.address || ""}<br>
-            ${pub.postcode || ""}<br>
             Click to open pub page.
           </div>
         `);
@@ -256,43 +270,68 @@
       });
     }
 
-    function renderNetworkCard() {
-      const resolvedPubs = getResolvedPubs();
-      const visiblePubs = resolvedPubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
-      const mappedPubs = resolvedPubs.filter(pub => hasCoordinates(pub)).length;
+    function getDistrictStats() {
+      const pubs = getResolvedPubs();
 
-      networkCardEl.innerHTML = `
-        <div class="hero-badge">Signal Layer</div>
-        <div class="hero-title">${unlockedSignals.size} / ${signals.length} Signals unlocked</div>
-        <div class="stack-meta">Unlocked Signals reveal nearby pubs and light up the city</div>
+      return districts.map(district => {
+        const districtSignals = signals.filter(signal => signal.districtId === district.id);
+        const districtPubs = pubs.filter(pub => getDistrictForPub(pub) === district.id);
+        const visiblePubs = districtPubs.filter(pub => hasCoordinates(pub) && isPubVisible(pub));
+        const unlockedCount = districtSignals.filter(signal => unlockedSignals.has(signal.id)).length;
 
-        <div class="stats-row">
-          <div class="mini-stat">
-            <div class="mini-stat-label">Signals active</div>
-            <div class="mini-stat-value">${unlockedSignals.size}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Visible pubs</div>
-            <div class="mini-stat-value">${visiblePubs.length}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Mapped pubs</div>
-            <div class="mini-stat-value">${mappedPubs}</div>
-          </div>
-        </div>
+        return {
+          district,
+          totalSignals: districtSignals.length,
+          unlockedSignals: unlockedCount,
+          totalPubs: districtPubs.length,
+          visiblePubs: visiblePubs.length,
+          online: unlockedCount > 0
+        };
+      });
+    }
 
-        <div class="comparison-line compact">
-          ${unlockedSignals.size === 0
-            ? "Start by walking to a Signal. Pubs remain hidden until a nearby Signal is activated."
-            : "Signals unlocked. Newly revealed zones now expose the pubs inside them."}
+    function renderDistrictCard() {
+      const stats = getDistrictStats();
+
+      districtCardEl.innerHTML = `
+        <div class="hero-badge">District Layer</div>
+        <div class="hero-title">${stats.filter(item => item.online).length} / ${districts.length} districts online</div>
+        <div class="stack-meta">Signals unlock districts. Districts contain pubs.</div>
+
+        <div class="district-list">
+          ${stats.map(item => `
+            <div class="district-row">
+              <div class="district-row-top">
+                <div class="district-name-wrap">
+                  <span class="district-dot" style="background:${item.district.color};"></span>
+                  <strong>${item.district.name}</strong>
+                </div>
+                <span class="district-status ${item.online ? "district-online" : "district-offline"}">
+                  ${item.online ? "Online" : "Locked"}
+                </span>
+              </div>
+
+              <div class="district-meta">
+                Signals: ${item.unlockedSignals}/${item.totalSignals} · Visible pubs: ${item.visiblePubs}/${item.totalPubs}
+              </div>
+
+              <div class="district-progress-bar">
+                <div
+                  class="district-progress-fill"
+                  style="width:${item.totalPubs ? (item.visiblePubs / item.totalPubs) * 100 : 0}%; background:${item.district.color};"
+                ></div>
+              </div>
+            </div>
+          `).join("")}
         </div>
       `;
     }
 
     function renderAll() {
+      renderDistrictLabels();
       renderSignals();
       renderPubs();
-      renderNetworkCard();
+      renderDistrictCard();
     }
 
     function status(message) {
@@ -315,7 +354,10 @@
       if (!unlockedSignals.has(signal.id)) {
         unlockedSignals.add(signal.id);
         localStorage.setItem("signals", JSON.stringify([...unlockedSignals]));
-        status(`${signal.name} unlocked. Area brought online.`);
+
+        const district = getDistrictById(signal.districtId);
+        status(`${signal.name} unlocked. ${district ? district.name : "District"} is now online.`);
+
         renderAll();
       } else {
         status(`${signal.name} is already online.`);
