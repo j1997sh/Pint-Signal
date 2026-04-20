@@ -1,108 +1,231 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pint Signal</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
-
 <body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal 🍺</div>
+        <div class="brand-subtitle">Cheap pint radar, pub passport, and check-ins</div>
+      </div>
 
-<header class="topbar">
-  <div class="brand-title">Pint Signal 🍺</div>
-  <nav class="menu">
-    <a href="index.html">Home</a>
-    <a href="passport.html">Passport</a>
-    <a href="activity.html">Activity</a>
-  </nav>
-</header>
+      <nav class="menu">
+        <a href="index.html">Home</a>
+        <a href="passport.html">Passport</a>
+        <a href="activity.html">Activity</a>
+      </nav>
+    </div>
+  </header>
 
-<main class="page">
+  <main class="page">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Your Progress</h2>
+        <p>Your current XP, badge tier, and contribution stats</p>
+      </div>
+      <div id="xpCard" class="info-card">Loading progress...</div>
+    </section>
 
-<h2>Your Progress</h2>
-<div id="xpCard" class="card"></div>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Map</h2>
+        <p>Browse Westminster pubs and jump into pub pages</p>
+      </div>
 
-<h2>Map</h2>
-<div id="map"></div>
+      <div id="map"></div>
 
-<h2>Cheap Pint Radar</h2>
-<div id="cheapest"></div>
+      <div class="controls-row">
+        <button onclick="centerOnUser()">Center On Me</button>
+      </div>
+    </section>
 
-</main>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Cheap Pint Radar</h2>
+        <p>The lowest recent pint prices we know about</p>
+      </div>
+      <div id="cheapest" class="stack-list"></div>
+    </section>
+  </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    import {
+      getAuth,
+      signInAnonymously
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
-const app = initializeApp({
-  apiKey:"AIzaSyB...",
-  authDomain:"pintsignal.firebaseapp.com",
-  projectId:"pintsignal"
-});
+    const app = initializeApp({
+      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+      authDomain: "pintsignal.firebaseapp.com",
+      projectId: "pintsignal"
+    });
 
-const db = getFirestore(app);
-const auth = getAuth(app);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-let map = L.map('map').setView([51.5,-0.12],15);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+    const xpCardEl = document.getElementById("xpCard");
+    const cheapestEl = document.getElementById("cheapest");
 
-let user;
-let pubs = [];
+    let map = L.map("map").setView([51.5007, -0.1290], 15);
+    let userLatLng = null;
+    let userMarker = null;
+    let pubs = [];
 
-function pintIcon(){
-  return L.divIcon({html:"🍺",className:"pint"});
-}
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: "&copy; OpenStreetMap & CARTO",
+      maxZoom: 19
+    }).addTo(map);
 
-navigator.geolocation.watchPosition(pos=>{
-  const lat = pos.coords.latitude;
-  const lng = pos.coords.longitude;
-  map.setView([lat,lng],16);
-});
+    function createPintIcon() {
+      return L.divIcon({
+        html: '<div class="pint-marker-inner">🍺</div>',
+        className: "pint-marker",
+        iconSize: [34, 34],
+        iconAnchor: [17, 28]
+      });
+    }
 
-async function load(){
-  const u = await signInAnonymously(auth);
-  user = u.user;
+    function getBadgeLabel(xp) {
+      if (xp >= 300) return "🏆 Pint Legend";
+      if (xp >= 150) return "🍺 Regular";
+      if (xp >= 75) return "🧭 Explorer";
+      return "✨ New Scout";
+    }
 
-  const pubSnap = await getDocs(collection(db,"pubs"));
-  const priceSnap = await getDocs(collection(db,"prices"));
-  const checkSnap = await getDocs(collection(db,"checkins"));
+    function formatPrice(value) {
+      return `£${Number(value).toFixed(2)}`;
+    }
 
-  let myC=0,myP=0;
+    async function load() {
+      const authResult = await signInAnonymously(auth);
+      const user = authResult.user;
 
-  checkSnap.forEach(d=>{if(d.data().userId===user.uid) myC++;});
-  priceSnap.forEach(d=>{if(d.data().userId===user.uid) myP++;});
+      const pubSnap = await getDocs(collection(db, "pubs"));
+      const priceSnap = await getDocs(collection(db, "prices"));
+      const checkSnap = await getDocs(collection(db, "checkins"));
 
-  const xp = (myC*10)+(myP*15);
+      let myCheckins = 0;
+      let myPrices = 0;
 
-  document.getElementById("xpCard").innerHTML =
-    `<b>XP: ${xp}</b><br>Check-ins: ${myC}<br>Prices: ${myP}`;
+      checkSnap.forEach(doc => {
+        if (doc.data().userId === user.uid) myCheckins++;
+      });
 
-  pubSnap.forEach(doc=>{
-    const p = doc.data();
-    p.id=doc.id;
-    pubs.push(p);
+      priceSnap.forEach(doc => {
+        if (doc.data().userId === user.uid) myPrices++;
+      });
 
-    const m = L.marker([p.lat,p.lng],{icon:pintIcon()}).addTo(map);
-    m.on("click",()=>window.location="pub.html?id="+p.id);
-  });
+      const xp = (myCheckins * 10) + (myPrices * 15);
 
-  let prices=[];
-  priceSnap.forEach(d=>prices.push(d.data()));
-  prices.sort((a,b)=>a.price-b.price);
+      xpCardEl.innerHTML = `
+        <div class="hero-badge">${getBadgeLabel(xp)}</div>
+        <div class="hero-title">${xp} XP</div>
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Check-ins</div>
+            <div class="mini-stat-value">${myCheckins}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Prices</div>
+            <div class="mini-stat-value">${myPrices}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">User</div>
+            <div class="mini-stat-value">${user.uid.slice(0, 6)}</div>
+          </div>
+        </div>
+      `;
 
-  prices.slice(0,3).forEach(p=>{
-    const div=document.createElement("div");
-    div.className="card";
-    div.innerHTML=`${p.pubName}<br>${p.drinkName} £${p.price}`;
-    document.getElementById("cheapest").appendChild(div);
-  });
-}
+      const prices = [];
 
-load();
-</script>
+      pubSnap.forEach(doc => {
+        const pub = doc.data();
+        pubs.push({
+          id: doc.id,
+          ...pub
+        });
 
+        const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
+        marker.on("click", () => {
+          window.location.href = `pub.html?id=${doc.id}`;
+        });
+      });
+
+      priceSnap.forEach(doc => {
+        prices.push(doc.data());
+      });
+
+      prices.sort((a, b) => Number(a.price) - Number(b.price));
+
+      cheapestEl.innerHTML = "";
+
+      if (prices.length === 0) {
+        cheapestEl.innerHTML = `<div class="empty-state">No prices submitted yet.</div>`;
+      } else {
+        prices.slice(0, 5).forEach(price => {
+          const card = document.createElement("button");
+          card.className = "stack-card pub-list-card";
+          card.type = "button";
+
+          card.innerHTML = `
+            <div class="stack-title">${price.pubName || "Unknown pub"}</div>
+            <div class="stack-price">${price.drinkName} • ${formatPrice(price.price)}</div>
+            <div class="stack-meta">${price.note || "Latest submitted price"}</div>
+          `;
+
+          if (price.pubId) {
+            card.addEventListener("click", () => {
+              window.location.href = `pub.html?id=${price.pubId}`;
+            });
+          }
+
+          cheapestEl.appendChild(card);
+        });
+      }
+    }
+
+    navigator.geolocation.watchPosition(
+      position => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        userLatLng = [lat, lng];
+
+        if (!userMarker) {
+          userMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here");
+        } else {
+          userMarker.setLatLng([lat, lng]);
+        }
+      },
+      () => {},
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 10000
+      }
+    );
+
+    function centerOnUser() {
+      if (!userLatLng) return;
+      map.setView(userLatLng, 16);
+    }
+
+    window.centerOnUser = centerOnUser;
+
+    load();
+  </script>
 </body>
 </html>
