@@ -4,247 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Leaderboard</title>
+
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div>
-        <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Pint price leaderboard</div>
-      </div>
-
-      <nav class="menu">
-        <a href="index.html">Home</a>
-        <a href="passport.html">Passport</a>
-        <a href="activity.html">Activity</a>
-        <a href="leaderboard.html">Leaderboard</a>
-        <a href="add-pub.html">Add a Pub</a>
-      </nav>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <div class="brand-title">🏆 Leaderboard</div>
+      <div class="brand-subtitle">Cheapest pints</div>
     </div>
-  </header>
 
-  <main class="page">
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Cheapest Pints</h2>
-        <p>Lowest submitted prices across the app</p>
-      </div>
-      <div id="cheapestPints" class="stack-list"></div>
-    </section>
+    <nav class="menu">
+      <a href="index.html">Map</a>
+      <a href="passport.html">Passport</a>
+      <a href="leaderboard.html">Leaderboard</a>
+    </nav>
+  </div>
+</header>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Cheapest Pubs</h2>
-        <p>Best known value at each pub</p>
-      </div>
-      <div id="cheapestPubs" class="stack-list"></div>
-    </section>
+<main class="page page-narrow">
+  <section class="panel">
+    <h2>Leaderboard</h2>
+    <p class="stack-meta">Coming soon</p>
+  </section>
+</main>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Most Expensive Pints</h2>
-        <p>Just for fun</p>
-      </div>
-      <div id="expensivePints" class="stack-list"></div>
-    </section>
-  </main>
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      getDocs
-    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
-      authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal",
-      storageBucket: "pintsignal.firebasestorage.app",
-      messagingSenderId: "63376472196",
-      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    const cheapestPintsEl = document.getElementById("cheapestPints");
-    const cheapestPubsEl = document.getElementById("cheapestPubs");
-    const expensivePintsEl = document.getElementById("expensivePints");
-
-    function formatPrice(value) {
-      const numberValue = Number(value);
-      if (Number.isNaN(numberValue)) return "£0.00";
-      return `£${numberValue.toFixed(2)}`;
-    }
-
-    function formatTimeAgo(timestampMs) {
-      const safeTime = Number(timestampMs || 0);
-      if (!safeTime) return "Unknown time";
-
-      const diffMs = Date.now() - safeTime;
-      const diffMinutes = Math.floor(diffMs / 60000);
-
-      if (diffMinutes < 1) return "just now";
-      if (diffMinutes === 1) return "1 minute ago";
-      if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
-
-      const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours === 1) return "1 hour ago";
-      if (diffHours < 24) return `${diffHours} hours ago`;
-
-      const diffDays = Math.floor(diffHours / 24);
-      if (diffDays === 1) return "1 day ago";
-      return `${diffDays} days ago`;
-    }
-
-    function createPriceCard(item, rankLabel) {
-      const card = document.createElement("div");
-      card.className = "stack-card";
-
-      card.innerHTML = `
-        <div class="hero-badge">${rankLabel}</div>
-        <div class="stack-title">${item.pubName || "Unknown pub"}</div>
-        <div class="stack-price">${item.drinkName || "Drink"} • ${formatPrice(item.price)}</div>
-        <div class="stack-meta">${item.note ? item.note + " • " : ""}${formatTimeAgo(item.createdAtMs)}</div>
-      `;
-
-      return card;
-    }
-
-    function createPubCard(item, rankLabel) {
-      const card = document.createElement("div");
-      card.className = "stack-card";
-
-      card.innerHTML = `
-        <div class="hero-badge">${rankLabel}</div>
-        <div class="stack-title">${item.pubName || "Unknown pub"}</div>
-        <div class="stack-price">${item.drinkName || "Drink"} • ${formatPrice(item.price)}</div>
-        <div class="stack-meta">Best known value at this pub</div>
-      `;
-
-      return card;
-    }
-
-    async function load() {
-      try {
-        const pricesSnap = await getDocs(collection(db, "prices"));
-        const prices = [];
-
-        pricesSnap.forEach(doc => {
-          const data = doc.data();
-
-          if (typeof data.price === "undefined") return;
-
-          prices.push({
-            pubId: data.pubId || "",
-            pubName: data.pubName || "Unknown pub",
-            drinkName: data.drinkName || "Drink",
-            price: Number(data.price),
-            note: data.note || "",
-            createdAtMs: Number(data.createdAtMs || 0)
-          });
-        });
-
-        cheapestPintsEl.innerHTML = "";
-        cheapestPubsEl.innerHTML = "";
-        expensivePintsEl.innerHTML = "";
-
-        if (prices.length === 0) {
-          cheapestPintsEl.innerHTML = `<div class="empty-state">No prices submitted yet.</div>`;
-          cheapestPubsEl.innerHTML = `<div class="empty-state">No pub leaderboard yet.</div>`;
-          expensivePintsEl.innerHTML = `<div class="empty-state">No prices submitted yet.</div>`;
-          return;
-        }
-
-        const cheapest = [...prices]
-          .filter(item => !Number.isNaN(item.price))
-          .sort((a, b) => a.price - b.price || b.createdAtMs - a.createdAtMs)
-          .slice(0, 10);
-
-        const expensive = [...prices]
-          .filter(item => !Number.isNaN(item.price))
-          .sort((a, b) => b.price - a.price || b.createdAtMs - a.createdAtMs)
-          .slice(0, 10);
-
-        const bestByPub = {};
-
-        prices.forEach(item => {
-          if (!item.pubName || Number.isNaN(item.price)) return;
-
-          const key = item.pubId || item.pubName;
-
-          if (!bestByPub[key]) {
-            bestByPub[key] = item;
-            return;
-          }
-
-          if (item.price < bestByPub[key].price) {
-            bestByPub[key] = item;
-            return;
-          }
-
-          if (item.price === bestByPub[key].price && item.createdAtMs > bestByPub[key].createdAtMs) {
-            bestByPub[key] = item;
-          }
-        });
-
-        const cheapestPubs = Object.values(bestByPub)
-          .sort((a, b) => a.price - b.price || b.createdAtMs - a.createdAtMs)
-          .slice(0, 10);
-
-        if (cheapest.length === 0) {
-          cheapestPintsEl.innerHTML = `<div class="empty-state">No valid prices found.</div>`;
-        } else {
-          cheapest.forEach((item, index) => {
-            cheapestPintsEl.appendChild(createPriceCard(item, `#${index + 1}`));
-          });
-        }
-
-        if (cheapestPubs.length === 0) {
-          cheapestPubsEl.innerHTML = `<div class="empty-state">No pub leaderboard yet.</div>`;
-        } else {
-          cheapestPubs.forEach((item, index) => {
-            cheapestPubsEl.appendChild(createPubCard(item, `#${index + 1}`));
-          });
-        }
-
-        if (expensive.length === 0) {
-          expensivePintsEl.innerHTML = `<div class="empty-state">No valid prices found.</div>`;
-        } else {
-          expensive.forEach((item, index) => {
-            expensivePintsEl.appendChild(createPriceCard(item, `#${index + 1}`));
-          });
-        }
-      } catch (error) {
-        console.error(error);
-
-        cheapestPintsEl.innerHTML = `
-          <div class="empty-state">
-            Could not load cheapest pints.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-
-        cheapestPubsEl.innerHTML = `
-          <div class="empty-state">
-            Could not load cheapest pubs.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-
-        expensivePintsEl.innerHTML = `
-          <div class="empty-state">
-            Could not load expensive pints.<br>
-            ${error.message || "Unknown error"}
-          </div>
-        `;
-      }
-    }
-
-    load();
-  </script>
 </body>
 </html>
