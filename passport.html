@@ -85,6 +85,12 @@
       rare: "pint_signal_rare_assignments"
     };
 
+    const REWARD_STEPS = [
+      { threshold: 25, label: "Scout" },
+      { threshold: 50, label: "Regular" },
+      { threshold: 100, label: "Cleared" }
+    ];
+
     const unlockedSignals = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.signals) || "[]"));
     const visitedPubs = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.visited) || "[]"));
     const xp = Number(localStorage.getItem(STORAGE_KEYS.xp) || "0");
@@ -139,6 +145,10 @@
       return rareAssignments[pub.id] || "common";
     }
 
+    function getDistrictPubs(pubs, districtId) {
+      return pubs.filter(pub => getDistrictForPub(pub) === districtId);
+    }
+
     const pubs = getResolvedPubs();
     const visitedPubRecords = pubs.filter(pub => visitedPubs.has(pub.id));
 
@@ -165,7 +175,7 @@
     function renderDistrictProgress() {
       districtProgressListEl.innerHTML = districts.map(district => {
         const districtSignals = signals.filter(signal => signal.districtId === district.id);
-        const districtPubs = pubs.filter(pub => getDistrictForPub(pub) === district.id);
+        const districtPubs = getDistrictPubs(pubs, district.id);
         const districtVisited = districtPubs.filter(pub => visitedPubs.has(pub.id));
         const unlockedCount = districtSignals.filter(signal => unlockedSignals.has(signal.id)).length;
         const percent = districtPubs.length ? (districtVisited.length / districtPubs.length) * 100 : 0;
@@ -187,14 +197,31 @@
             </div>
 
             <div class="district-progress-bar">
-              <div
-                class="district-progress-fill"
-                style="width:${percent}%; background:${district.color};"
-              ></div>
+              <div class="district-progress-fill" style="width:${percent}%; background:${district.color};"></div>
+            </div>
+
+            <div class="reward-row">
+              ${REWARD_STEPS.map(step => `
+                <span class="reward-pill ${percent >= step.threshold ? "reward-unlocked" : "reward-locked"}">
+                  ${step.threshold}% ${step.label}
+                </span>
+              `).join("")}
             </div>
           </div>
         `;
       }).join("");
+    }
+
+    function renderPubSelect() {
+      const sorted = [...pubs].sort((a, b) => a.name.localeCompare(b.name));
+
+      pubSelectEl.innerHTML = `
+        <option value="">Choose a pub...</option>
+        ${sorted.map(pub => {
+          const district = districts.find(d => d.id === getDistrictForPub(pub));
+          return `<option value="${pub.id}">${pub.name}${district ? ` — ${district.name}` : ""}</option>`;
+        }).join("")}
+      `;
     }
 
     function renderVisitedPubs() {
@@ -216,18 +243,6 @@
           </button>
         `;
       }).join("");
-    }
-
-    function renderPubSelect() {
-      const sorted = [...pubs].sort((a, b) => a.name.localeCompare(b.name));
-
-      pubSelectEl.innerHTML = `
-        <option value="">Choose a pub...</option>
-        ${sorted.map(pub => {
-          const district = districts.find(d => d.id === getDistrictForPub(pub));
-          return `<option value="${pub.id}">${pub.name}${district ? ` — ${district.name}` : ""}</option>`;
-        }).join("")}
-      `;
     }
 
     function openSelectedPub() {
