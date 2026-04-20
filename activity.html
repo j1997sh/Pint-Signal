@@ -1,48 +1,116 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Activity</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal 🍺</div>
+        <div class="brand-subtitle">Recent activity</div>
+      </div>
 
-<header class="topbar">
-  <a href="index.html">← Home</a>
-</header>
+      <nav class="menu">
+        <a href="index.html">Home</a>
+        <a href="passport.html">Passport</a>
+        <a href="activity.html">Activity</a>
+      </nav>
+    </div>
+  </header>
 
-<main class="page">
+  <main class="page">
+    <section class="panel two-column">
+      <div>
+        <div class="panel-header">
+          <h2>Recent Prices</h2>
+          <p>Latest user-submitted pint prices</p>
+        </div>
+        <div id="prices" class="stack-list"></div>
+      </div>
 
-<h2>Recent Prices</h2>
-<div id="prices"></div>
+      <div>
+        <div class="panel-header">
+          <h2>Recent Check-Ins</h2>
+          <p>Latest passport stamp activity</p>
+        </div>
+        <div id="checkins" class="stack-list"></div>
+      </div>
+    </section>
+  </main>
 
-</main>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    const app = initializeApp({
+      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+      authDomain: "pintsignal.firebaseapp.com",
+      projectId: "pintsignal"
+    });
 
-const app=initializeApp({
-  apiKey:"AIzaSyB...",
-  authDomain:"pintsignal.firebaseapp.com",
-  projectId:"pintsignal"
-});
+    const db = getFirestore(app);
 
-const db=getFirestore(app);
+    const pricesEl = document.getElementById("prices");
+    const checkinsEl = document.getElementById("checkins");
 
-async function load(){
-  const s=await getDocs(collection(db,"prices"));
-  s.forEach(doc=>{
-    const d=doc.data();
-    const div=document.createElement("div");
-    div.className="card";
-    div.innerHTML=`${d.pubName}<br>${d.drinkName} £${d.price}`;
-    document.getElementById("prices").appendChild(div);
-  });
-}
+    function formatPrice(value) {
+      return `£${Number(value).toFixed(2)}`;
+    }
 
-load();
-</script>
+    async function load() {
+      const priceSnap = await getDocs(collection(db, "prices"));
+      const checkSnap = await getDocs(collection(db, "checkins"));
 
+      const prices = [];
+      const checkins = [];
+
+      priceSnap.forEach(doc => prices.push(doc.data()));
+      checkSnap.forEach(doc => checkins.push(doc.data()));
+
+      prices.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+      checkins.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+
+      pricesEl.innerHTML = "";
+      checkinsEl.innerHTML = "";
+
+      if (prices.length === 0) {
+        pricesEl.innerHTML = `<div class="empty-state">No prices yet.</div>`;
+      } else {
+        prices.slice(0, 20).forEach(price => {
+          const div = document.createElement("div");
+          div.className = "stack-card";
+          div.innerHTML = `
+            <div class="stack-title">${price.pubName || "Unknown pub"}</div>
+            <div class="stack-price">${price.drinkName} • ${formatPrice(price.price)}</div>
+          `;
+          pricesEl.appendChild(div);
+        });
+      }
+
+      if (checkins.length === 0) {
+        checkinsEl.innerHTML = `<div class="empty-state">No check-ins yet.</div>`;
+      } else {
+        checkins.slice(0, 20).forEach(checkin => {
+          const div = document.createElement("div");
+          div.className = "stack-card";
+          div.innerHTML = `
+            <div class="stack-title">${checkin.pubName || "Unknown pub"}</div>
+            <div class="stack-meta">Passport stamped</div>
+          `;
+          checkinsEl.appendChild(div);
+        });
+      }
+    }
+
+    load();
+  </script>
 </body>
 </html>
