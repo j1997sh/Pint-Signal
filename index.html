@@ -12,7 +12,7 @@
     <div class="topbar-inner">
       <div>
         <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Uncovered London MVP</div>
+        <div class="brand-subtitle">Uncovered London</div>
       </div>
 
       <nav class="menu">
@@ -27,13 +27,17 @@
   </header>
 
   <main class="page">
-    <section class="panel">
+    <section class="panel map-panel">
       <div class="panel-header">
-        <h2>Map</h2>
-        <p>Your live pub map with reveal circles from visited pubs</p>
+        <h2>Uncovered London</h2>
+        <p>Check into pubs to reveal Westminster</p>
       </div>
 
-      <div id="map"></div>
+      <div class="map-shell">
+        <div id="map"></div>
+        <div class="map-overlay-vignette"></div>
+        <div class="map-overlay-noise"></div>
+      </div>
 
       <div class="controls-row">
         <button onclick="centerOnUser()">Center On Me</button>
@@ -143,45 +147,30 @@
     const mapStatusEl = document.getElementById("mapStatus");
 
     const REVEAL_RADIUS_METERS = 200;
-    const WESTMINSTER_BOUNDS = {
-      north: 51.5159,
-      south: 51.4852,
-      west: -0.1592,
-      east: -0.1092
-    };
 
-    let map = L.map("map").setView([51.5007, -0.1290], 14);
+    let map = L.map("map", {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([51.5007, -0.1290], 14);
+
     let userLatLng = null;
     let userMarker = null;
     let pubMarkers = [];
     let revealCircles = [];
+    let glowCircles = [];
     let visitedPubIds = new Set();
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: "&copy; OpenStreetMap & CARTO",
       maxZoom: 19
     }).addTo(map);
-
-    const boundaryRect = L.rectangle(
-      [
-        [WESTMINSTER_BOUNDS.south, WESTMINSTER_BOUNDS.west],
-        [WESTMINSTER_BOUNDS.north, WESTMINSTER_BOUNDS.east]
-      ],
-      {
-        color: "#8e8e93",
-        weight: 1,
-        fillColor: "#000000",
-        fillOpacity: 0.08,
-        interactive: false
-      }
-    ).addTo(map);
 
     function createPintIcon(isVisited) {
       return L.divIcon({
         html: `<div class="pint-marker-inner ${isVisited ? "pint-marker-visited" : "pint-marker-default"}">🍺</div>`,
         className: "pint-marker",
-        iconSize: [34, 34],
-        iconAnchor: [17, 28]
+        iconSize: [36, 36],
+        iconAnchor: [18, 28]
       });
     }
 
@@ -282,6 +271,9 @@
     function clearRevealCircles() {
       revealCircles.forEach(circle => map.removeLayer(circle));
       revealCircles = [];
+
+      glowCircles.forEach(circle => map.removeLayer(circle));
+      glowCircles = [];
     }
 
     function renderRevealCircles() {
@@ -291,14 +283,24 @@
       const visitedPubs = pubs.filter(pub => hasCoordinates(pub) && visitedPubIds.has(pub.id));
 
       visitedPubs.forEach(pub => {
-        const circle = L.circle([pub.lat, pub.lng], {
-          radius: REVEAL_RADIUS_METERS,
-          color: "#ff9f0a",
-          weight: 1,
-          fillColor: "#ffcc80",
-          fillOpacity: 0.12
+        const glow = L.circle([pub.lat, pub.lng], {
+          radius: REVEAL_RADIUS_METERS * 1.25,
+          stroke: false,
+          fillColor: "#ffd27a",
+          fillOpacity: 0.08,
+          interactive: false
         }).addTo(map);
 
+        const circle = L.circle([pub.lat, pub.lng], {
+          radius: REVEAL_RADIUS_METERS,
+          color: "#ffb347",
+          weight: 1,
+          fillColor: "#ffd27a",
+          fillOpacity: 0.18,
+          interactive: false
+        }).addTo(map);
+
+        glowCircles.push(glow);
         revealCircles.push(circle);
       });
     }
@@ -321,7 +323,7 @@
             <strong>${pub.name}</strong><br>
             ${pub.address || ""}<br>
             ${pub.postcode || ""}<br>
-            <span style="color:${isVisited ? "#1d7a34" : "#666"};">
+            <span style="color:${isVisited ? "#ffd27a" : "#b5b5b5"};">
               ${isVisited ? "Visited ✓" : "Not visited yet"}
             </span>
           </div>
@@ -369,7 +371,7 @@
         </div>
 
         <div class="comparison-line compact">
-          Only pubs with coordinates can appear on the map and count toward uncovering.
+          No square boundary now — the map reveal is driven by glowing pub discovery circles.
         </div>
       `;
     }
@@ -405,7 +407,7 @@
         </div>
 
         <div class="comparison-line compact">
-          Full uncovered % is shown on your Passport page because it is personal to each user.
+          The map is now atmospheric and open-ended. Your Passport still tracks the personal percentage.
         </div>
       `;
     }
@@ -481,18 +483,19 @@
     async function loadVisitedPubIds() {
       visitedPubIds = new Set();
 
+      const authResult = await signInAnonymously(auth);
+      const currentUser = authResult.user;
+
       const checkSnap = await getDocs(collection(db, "checkins"));
       checkSnap.forEach(doc => {
         const data = doc.data();
-        if (data.pubId) {
+        if (data.userId === currentUser.uid && data.pubId) {
           visitedPubIds.add(data.pubId);
         }
       });
     }
 
     async function loadCommunityData() {
-      await signInAnonymously(auth);
-
       const priceSnap = await getDocs(collection(db, "prices"));
       const prices = [];
 
