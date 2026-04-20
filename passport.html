@@ -18,6 +18,8 @@
         <a href="index.html">Home</a>
         <a href="passport.html">Passport</a>
         <a href="activity.html">Activity</a>
+        <a href="leaderboard.html">Leaderboard</a>
+        <a href="add-pub.html">Add a Pub</a>
       </nav>
     </div>
   </header>
@@ -87,65 +89,20 @@
     function getBadgeTier(visitedCount, priceCount) {
       const xp = (visitedCount * 10) + (priceCount * 15);
 
-      if (xp >= 300) {
-        return {
-          label: "🏆 Pint Legend",
-          subtitle: "You’re becoming a Westminster pub master."
-        };
-      }
-
-      if (xp >= 150) {
-        return {
-          label: "🍺 Regular",
-          subtitle: "Solid pub momentum."
-        };
-      }
-
-      if (xp >= 75) {
-        return {
-          label: "🧭 Explorer",
-          subtitle: "You’re building a proper pub trail."
-        };
-      }
-
-      return {
-        label: "✨ New Scout",
-        subtitle: "Start collecting your first stamps."
-      };
+      if (xp >= 300) return { label: "🏆 Pint Legend", subtitle: "You’re becoming a Westminster pub master." };
+      if (xp >= 150) return { label: "🍺 Regular", subtitle: "Solid pub momentum." };
+      if (xp >= 75) return { label: "🧭 Explorer", subtitle: "You’re building a proper pub trail." };
+      return { label: "✨ New Scout", subtitle: "Start collecting your first stamps." };
     }
 
     function buildBadgeData(visitedCount, priceCount, totalPubs) {
       return [
-        {
-          emoji: visitedCount >= 1 ? "✅" : "⬜",
-          title: "First Stamp",
-          unlocked: visitedCount >= 1
-        },
-        {
-          emoji: visitedCount >= 3 ? "✅" : "⬜",
-          title: "3 Pubs Visited",
-          unlocked: visitedCount >= 3
-        },
-        {
-          emoji: visitedCount >= 5 ? "✅" : "⬜",
-          title: "5 Pubs Visited",
-          unlocked: visitedCount >= 5
-        },
-        {
-          emoji: priceCount >= 1 ? "✅" : "⬜",
-          title: "Price Scout",
-          unlocked: priceCount >= 1
-        },
-        {
-          emoji: priceCount >= 5 ? "✅" : "⬜",
-          title: "Price Machine",
-          unlocked: priceCount >= 5
-        },
-        {
-          emoji: visitedCount === totalPubs && totalPubs > 0 ? "🏁" : "⬜",
-          title: "Westminster Complete",
-          unlocked: visitedCount === totalPubs && totalPubs > 0
-        }
+        { emoji: visitedCount >= 1 ? "✅" : "⬜", title: "First Stamp", unlocked: visitedCount >= 1 },
+        { emoji: visitedCount >= 3 ? "✅" : "⬜", title: "3 Pubs Visited", unlocked: visitedCount >= 3 },
+        { emoji: visitedCount >= 5 ? "✅" : "⬜", title: "5 Pubs Visited", unlocked: visitedCount >= 5 },
+        { emoji: priceCount >= 1 ? "✅" : "⬜", title: "Price Scout", unlocked: priceCount >= 1 },
+        { emoji: priceCount >= 5 ? "✅" : "⬜", title: "Price Machine", unlocked: priceCount >= 5 },
+        { emoji: visitedCount === totalPubs && totalPubs > 0 ? "🏁" : "⬜", title: "Westminster Complete", unlocked: visitedCount === totalPubs && totalPubs > 0 }
       ];
     }
 
@@ -181,24 +138,17 @@
 
       checkinsSnap.forEach(doc => {
         const data = doc.data();
-        if (data.userId === uid) {
-          visited.add(data.pubId);
-        }
+        if (data.userId === uid) visited.add(data.pubId);
       });
 
       pricesSnap.forEach(doc => {
         const data = doc.data();
-        if (data.userId === uid) {
-          myPriceCount++;
-        }
+        if (data.userId === uid) myPriceCount++;
       });
 
       const pubs = [];
       pubsSnap.forEach(doc => {
-        pubs.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        pubs.push({ id: doc.id, ...doc.data() });
       });
 
       const visitedCount = visited.size;
@@ -262,17 +212,13 @@
       if (visitedPubs.length === 0) {
         visitedPubsEl.innerHTML = `<div class="empty-state">No passport stamps yet. Go check into your first pub.</div>`;
       } else {
-        visitedPubs.forEach(pub => {
-          visitedPubsEl.appendChild(createStampCard(pub, true));
-        });
+        visitedPubs.forEach(pub => visitedPubsEl.appendChild(createStampCard(pub, true)));
       }
 
       if (unvisitedPubs.length === 0) {
         unvisitedPubsEl.innerHTML = `<div class="empty-state">You’ve visited every loaded pub. Legend.</div>`;
       } else {
-        unvisitedPubs.forEach(pub => {
-          unvisitedPubsEl.appendChild(createStampCard(pub, false));
-        });
+        unvisitedPubs.forEach(pub => unvisitedPubsEl.appendChild(createStampCard(pub, false)));
       }
     }
 
