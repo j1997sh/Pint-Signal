@@ -28,10 +28,15 @@
   <main class="page">
     <section class="panel">
       <div class="panel-header">
-        <h2>Your Progress</h2>
-        <p>Your current XP, badge tier, and contribution stats</p>
+        <h2>Map</h2>
+        <p>Your live pub map comes first</p>
       </div>
-      <div id="xpCard" class="info-card">Loading progress...</div>
+
+      <div id="map"></div>
+
+      <div class="controls-row">
+        <button onclick="centerOnUser()">Center On Me</button>
+      </div>
     </section>
 
     <section class="panel">
@@ -39,7 +44,37 @@
         <h2>Community Totaliser</h2>
         <p>What all logged pints add up to across the app</p>
       </div>
-      <div id="communityTotals" class="totals-grid"></div>
+      <div id="communityTotals" class="info-card">Loading totals...</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Cheap Pint Radar</h2>
+        <p>The lowest recent pint prices we know about</p>
+      </div>
+      <div id="cheapest" class="stack-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Pint Calculator</h2>
+        <p>See where the money goes for a single pint price</p>
+      </div>
+
+      <div class="info-card">
+        <div class="form-grid single-column">
+          <label class="form-field">
+            <span>Pint price (£)</span>
+            <input id="awarenessPrice" type="number" step="0.01" min="0" value="6.00" placeholder="e.g. 6.00" />
+          </label>
+        </div>
+
+        <div class="controls-row">
+          <button onclick="runAwarenessCalculator()">Calculate</button>
+        </div>
+
+        <div id="awarenessResult" class="awareness-result"></div>
+      </div>
     </section>
 
     <section class="panel">
@@ -67,58 +102,6 @@
         </a>
       </div>
     </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Map</h2>
-        <p>Browse Westminster pubs and jump into pub pages</p>
-      </div>
-
-      <div id="map"></div>
-
-      <div class="controls-row">
-        <button onclick="centerOnUser()">Center On Me</button>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Cheap Pint Radar</h2>
-        <p>The lowest recent pint prices we know about</p>
-      </div>
-      <div id="cheapest" class="stack-list"></div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Government vs Pub Split</h2>
-        <p>Simple estimate of where the money from one pint goes</p>
-      </div>
-
-      <div class="info-card">
-        <div class="form-grid">
-          <label class="form-field">
-            <span>Pint price (£)</span>
-            <input id="awarenessPrice" type="number" step="0.01" min="0" value="6.00" placeholder="e.g. 6.00" />
-          </label>
-        </div>
-
-        <div class="controls-row">
-          <button onclick="runAwarenessCalculator()">Calculate</button>
-        </div>
-
-        <div id="awarenessResult" class="awareness-result"></div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Example Pint Breakdown</h2>
-        <p>Quick reference for common pint prices</p>
-      </div>
-
-      <div id="exampleBreakdowns" class="stack-list"></div>
-    </section>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -135,20 +118,22 @@
       signInAnonymously
     } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
-    const app = initializeApp({
+    const firebaseConfig = {
       apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
       authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal"
-    });
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+    };
 
+    const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    const xpCardEl = document.getElementById("xpCard");
+    const communityTotalsEl = document.getElementById("communityTotals");
     const cheapestEl = document.getElementById("cheapest");
     const awarenessResultEl = document.getElementById("awarenessResult");
-    const exampleBreakdownsEl = document.getElementById("exampleBreakdowns");
-    const communityTotalsEl = document.getElementById("communityTotals");
 
     let map = L.map("map").setView([51.5007, -0.1290], 15);
     let userLatLng = null;
@@ -168,11 +153,8 @@
       });
     }
 
-    function getBadgeLabel(xp) {
-      if (xp >= 300) return "🏆 Pint Legend";
-      if (xp >= 150) return "🍺 Regular";
-      if (xp >= 75) return "🧭 Explorer";
-      return "✨ New Scout";
+    function formatMoney(value) {
+      return `£${Number(value).toFixed(2)}`;
     }
 
     function formatPrice(value) {
@@ -186,8 +168,7 @@
       const beerCost = 1.50;
       const overheads = 3.00;
       const governmentRevenue = vat + beerDuty;
-      const pubAfterDirectTaxAndBeer = price - vat - beerDuty - beerCost;
-      const estimatedSurplusAfterCosts = price - vat - beerDuty - beerCost - overheads;
+      const pubSurplus = price - vat - beerDuty - beerCost - overheads;
 
       return {
         salePrice: price,
@@ -196,168 +177,106 @@
         beerCost,
         overheads,
         governmentRevenue,
-        pubAfterDirectTaxAndBeer,
-        estimatedSurplusAfterCosts
+        pubSurplus
       };
     }
 
-    function buildMoneyBar(result) {
-      const total = result.salePrice || 1;
-      const govPct = Math.max((result.governmentRevenue / total) * 100, 0);
-      const beerPct = Math.max((result.beerCost / total) * 100, 0);
-      const overheadPct = Math.max((result.overheads / total) * 100, 0);
-      const pubPct = Math.max((result.estimatedSurplusAfterCosts / total) * 100, 0);
+    function buildMoneyBarHtml(result) {
+      const parts = [
+        { label: "Government", value: Math.max(result.governmentRevenue, 0), className: "money-gov" },
+        { label: "Beer cost", value: Math.max(result.beerCost, 0), className: "money-beer" },
+        { label: "Overheads", value: Math.max(result.overheads, 0), className: "money-overheads" },
+        { label: "Pub surplus", value: Math.max(result.pubSurplus, 0), className: "money-pub" }
+      ];
+
+      const total = parts.reduce((sum, part) => sum + part.value, 0);
+
+      const barHtml = parts
+        .filter(part => part.value > 0)
+        .map(part => {
+          const width = total > 0 ? (part.value / total) * 100 : 0;
+          return `<div class="${part.className}" style="width:${width}%"></div>`;
+        })
+        .join("");
+
+      const legendHtml = parts
+        .map(part => `
+          <div class="money-legend-item">
+            <span class="money-dot ${part.className}"></span>
+            <span>${part.label}</span>
+            <strong>${formatMoney(part.value)}</strong>
+          </div>
+        `)
+        .join("");
 
       return `
-        <div class="money-bar">
-          <div class="money-segment government" style="width:${govPct}%"></div>
-          <div class="money-segment beer" style="width:${beerPct}%"></div>
-          <div class="money-segment overhead" style="width:${overheadPct}%"></div>
-          <div class="money-segment pub" style="width:${pubPct}%"></div>
-        </div>
-
-        <div class="money-legend">
-          <div class="legend-item"><span class="legend-dot government"></span>Government</div>
-          <div class="legend-item"><span class="legend-dot beer"></span>Beer cost</div>
-          <div class="legend-item"><span class="legend-dot overhead"></span>Overheads</div>
-          <div class="legend-item"><span class="legend-dot pub"></span>Pub surplus</div>
-        </div>
+        <div class="money-bar">${barHtml}</div>
+        <div class="money-legend">${legendHtml}</div>
       `;
     }
 
-    function buildAwarenessCard(result, titleText = "Breakdown") {
-      return `
+    function renderAwarenessResult(priceValue) {
+      const result = calculatePintEconomics(priceValue);
+
+      awarenessResultEl.innerHTML = `
         <div class="awareness-card">
-          <div class="hero-badge">${titleText}</div>
+          <div class="hero-badge">Calculator</div>
           <div class="hero-title">${formatPrice(result.salePrice)} pint</div>
 
-          ${buildMoneyBar(result)}
+          ${buildMoneyBarHtml(result)}
 
           <div class="breakdown-grid">
             <div class="breakdown-row">
               <span>VAT</span>
-              <strong>${formatPrice(result.vat)}</strong>
+              <strong>${formatMoney(result.vat)}</strong>
             </div>
             <div class="breakdown-row">
               <span>Beer duty</span>
-              <strong>${formatPrice(result.beerDuty)}</strong>
+              <strong>${formatMoney(result.beerDuty)}</strong>
             </div>
             <div class="breakdown-row">
               <span>Beer cost</span>
-              <strong>${formatPrice(result.beerCost)}</strong>
+              <strong>${formatMoney(result.beerCost)}</strong>
             </div>
             <div class="breakdown-row">
               <span>Overheads</span>
-              <strong>${formatPrice(result.overheads)}</strong>
+              <strong>${formatMoney(result.overheads)}</strong>
             </div>
             <div class="breakdown-row total government">
               <span>Government revenue</span>
-              <strong>${formatPrice(result.governmentRevenue)}</strong>
+              <strong>${formatMoney(result.governmentRevenue)}</strong>
             </div>
-            <div class="breakdown-row total">
+            <div class="breakdown-row total pub-side">
               <span>Estimated pub surplus after costs</span>
-              <strong>${formatPrice(result.estimatedSurplusAfterCosts)}</strong>
+              <strong>${formatMoney(result.pubSurplus)}</strong>
             </div>
           </div>
 
           <div class="comparison-line">
-            Pub earns <strong>${formatPrice(result.estimatedSurplusAfterCosts)}</strong> vs Government earns <strong>${formatPrice(result.governmentRevenue)}</strong> per pint
+            Pub side <strong>${formatMoney(result.pubSurplus)}</strong> vs Government <strong>${formatMoney(result.governmentRevenue)}</strong> per pint
           </div>
 
-          <div class="small-note">
+          <div class="calculator-note">
             Simplified estimate using VAT 20%, beer duty £0.60, beer cost £1.50, and overheads £3.00 per pint.
           </div>
         </div>
       `;
     }
 
-    function renderAwarenessResult(priceValue) {
-      const result = calculatePintEconomics(priceValue);
-      awarenessResultEl.innerHTML = buildAwarenessCard(result, "Live Estimate");
-    }
-
-    function renderExampleBreakdowns() {
-      const examples = [5, 6, 7, 8];
-      exampleBreakdownsEl.innerHTML = "";
-
-      examples.forEach(price => {
-        const result = calculatePintEconomics(price);
-        const card = document.createElement("div");
-        card.className = "stack-card";
-        card.innerHTML = buildAwarenessCard(result, "Example");
-        exampleBreakdownsEl.appendChild(card);
-      });
-    }
-
-    function renderCommunityTotals(prices, checkins, pubs) {
-      let totalSpend = 0;
-      let totalGovernment = 0;
-      let totalPubSurplus = 0;
-
-      prices.forEach(item => {
-        const economics = calculatePintEconomics(item.price);
-        totalSpend += Number(item.price || 0);
-        totalGovernment += economics.governmentRevenue;
-        totalPubSurplus += economics.estimatedSurplusAfterCosts;
-      });
-
-      communityTotalsEl.innerHTML = `
-        <div class="total-card">
-          <div class="mini-stat-label">Pints logged</div>
-          <div class="total-value">${prices.length}</div>
-        </div>
-        <div class="total-card">
-          <div class="mini-stat-label">Spend tracked</div>
-          <div class="total-value">${formatPrice(totalSpend)}</div>
-        </div>
-        <div class="total-card">
-          <div class="mini-stat-label">Estimated government revenue</div>
-          <div class="total-value">${formatPrice(totalGovernment)}</div>
-        </div>
-        <div class="total-card">
-          <div class="mini-stat-label">Estimated pub surplus</div>
-          <div class="total-value">${formatPrice(totalPubSurplus)}</div>
-        </div>
-        <div class="total-card">
-          <div class="mini-stat-label">Check-ins</div>
-          <div class="total-value">${checkins.length}</div>
-        </div>
-        <div class="total-card">
-          <div class="mini-stat-label">Pubs loaded</div>
-          <div class="total-value">${pubs.length}</div>
-        </div>
-      `;
-    }
-
     async function load() {
-      const authResult = await signInAnonymously(auth);
-      const user = authResult.user;
+      await signInAnonymously(auth);
 
       const pubSnap = await getDocs(collection(db, "pubs"));
       const priceSnap = await getDocs(collection(db, "prices"));
       const checkSnap = await getDocs(collection(db, "checkins"));
 
-      let myCheckins = 0;
-      let myPrices = 0;
-      const pubs = [];
       const prices = [];
-      const checkins = [];
-
-      checkSnap.forEach(doc => {
-        const data = doc.data();
-        checkins.push(data);
-        if (data.userId === user.uid) myCheckins++;
-      });
-
-      priceSnap.forEach(doc => {
-        const data = doc.data();
-        prices.push(data);
-        if (data.userId === user.uid) myPrices++;
-      });
+      let totalSpent = 0;
+      let totalGovernmentRevenue = 0;
+      let totalPubSurplus = 0;
 
       pubSnap.forEach(doc => {
         const pub = doc.data();
-        pubs.push({ id: doc.id, ...pub });
 
         const marker = L.marker([pub.lat, pub.lng], { icon: createPintIcon() }).addTo(map);
         marker.on("click", () => {
@@ -365,25 +284,43 @@
         });
       });
 
-      const xp = (myCheckins * 10) + (myPrices * 15);
+      priceSnap.forEach(doc => {
+        const data = doc.data();
+        prices.push(data);
 
-      xpCardEl.innerHTML = `
-        <div class="hero-badge">${getBadgeLabel(xp)}</div>
-        <div class="hero-title">${xp} XP</div>
+        const price = Number(data.price || 0);
+        totalSpent += price;
+
+        const economics = calculatePintEconomics(price);
+        totalGovernmentRevenue += economics.governmentRevenue;
+        totalPubSurplus += economics.pubSurplus;
+      });
+
+      communityTotalsEl.innerHTML = `
+        <div class="hero-badge">Community Totaliser</div>
+        <div class="hero-title">${prices.length} pints logged</div>
+
         <div class="stats-row">
           <div class="mini-stat">
-            <div class="mini-stat-label">Check-ins</div>
-            <div class="mini-stat-value">${myCheckins}</div>
+            <div class="mini-stat-label">Spend tracked</div>
+            <div class="mini-stat-value">${formatMoney(totalSpent)}</div>
           </div>
           <div class="mini-stat">
-            <div class="mini-stat-label">Prices</div>
-            <div class="mini-stat-value">${myPrices}</div>
+            <div class="mini-stat-label">Government revenue</div>
+            <div class="mini-stat-value">${formatMoney(totalGovernmentRevenue)}</div>
           </div>
           <div class="mini-stat">
-            <div class="mini-stat-label">User</div>
-            <div class="mini-stat-value">${user.uid.slice(0, 6)}</div>
+            <div class="mini-stat-label">Pub surplus</div>
+            <div class="mini-stat-value">${formatMoney(totalPubSurplus)}</div>
           </div>
         </div>
+
+        ${buildMoneyBarHtml({
+          governmentRevenue: totalGovernmentRevenue,
+          beerCost: prices.length * 1.50,
+          overheads: prices.length * 3.00,
+          pubSurplus: totalPubSurplus
+        })}
       `;
 
       prices.sort((a, b) => Number(a.price) - Number(b.price));
@@ -403,9 +340,8 @@
           card.innerHTML = `
             <div class="stack-title">${price.pubName || "Unknown pub"}</div>
             <div class="stack-price">${price.drinkName || "Drink"} • ${formatPrice(price.price)}</div>
-            <div class="stack-meta">${price.note || "Latest submitted price"}</div>
             <div class="radar-compare">
-              Pub earns <strong>${formatPrice(economics.estimatedSurplusAfterCosts)}</strong> vs Government earns <strong>${formatPrice(economics.governmentRevenue)}</strong>
+              Pub side <strong>${formatMoney(economics.pubSurplus)}</strong> vs Government <strong>${formatMoney(economics.governmentRevenue)}</strong>
             </div>
           `;
 
@@ -419,9 +355,7 @@
         });
       }
 
-      renderCommunityTotals(prices, checkins, pubs);
       renderAwarenessResult(6);
-      renderExampleBreakdowns();
     }
 
     navigator.geolocation.watchPosition(
