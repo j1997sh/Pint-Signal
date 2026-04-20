@@ -52,63 +52,113 @@
       getDocs
     } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
-    const app = initializeApp({
+    const firebaseConfig = {
       apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
       authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal"
-    });
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+    };
 
+    const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
     const pricesEl = document.getElementById("prices");
     const checkinsEl = document.getElementById("checkins");
 
     function formatPrice(value) {
-      return `£${Number(value).toFixed(2)}`;
+      const numberValue = Number(value);
+      if (Number.isNaN(numberValue)) return "£0.00";
+      return `£${numberValue.toFixed(2)}`;
+    }
+
+    function formatTimeAgo(timestampMs) {
+      const safeTime = Number(timestampMs || 0);
+      if (!safeTime) return "Unknown time";
+
+      const diffMs = Date.now() - safeTime;
+      const diffMinutes = Math.floor(diffMs / 60000);
+
+      if (diffMinutes < 1) return "just now";
+      if (diffMinutes === 1) return "1 minute ago";
+      if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours === 1) return "1 hour ago";
+      if (diffHours < 24) return `${diffHours} hours ago`;
+
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return "1 day ago";
+      return `${diffDays} days ago`;
     }
 
     async function load() {
-      const priceSnap = await getDocs(collection(db, "prices"));
-      const checkSnap = await getDocs(collection(db, "checkins"));
+      try {
+        const priceSnap = await getDocs(collection(db, "prices"));
+        const checkSnap = await getDocs(collection(db, "checkins"));
 
-      const prices = [];
-      const checkins = [];
+        const prices = [];
+        const checkins = [];
 
-      priceSnap.forEach(doc => prices.push(doc.data()));
-      checkSnap.forEach(doc => checkins.push(doc.data()));
-
-      prices.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
-      checkins.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
-
-      pricesEl.innerHTML = "";
-      checkinsEl.innerHTML = "";
-
-      if (prices.length === 0) {
-        pricesEl.innerHTML = `<div class="empty-state">No prices yet.</div>`;
-      } else {
-        prices.slice(0, 20).forEach(price => {
-          const div = document.createElement("div");
-          div.className = "stack-card";
-          div.innerHTML = `
-            <div class="stack-title">${price.pubName || "Unknown pub"}</div>
-            <div class="stack-price">${price.drinkName} • ${formatPrice(price.price)}</div>
-          `;
-          pricesEl.appendChild(div);
+        priceSnap.forEach(doc => {
+          prices.push(doc.data());
         });
-      }
 
-      if (checkins.length === 0) {
-        checkinsEl.innerHTML = `<div class="empty-state">No check-ins yet.</div>`;
-      } else {
-        checkins.slice(0, 20).forEach(checkin => {
-          const div = document.createElement("div");
-          div.className = "stack-card";
-          div.innerHTML = `
-            <div class="stack-title">${checkin.pubName || "Unknown pub"}</div>
-            <div class="stack-meta">Passport stamped</div>
-          `;
-          checkinsEl.appendChild(div);
+        checkSnap.forEach(doc => {
+          checkins.push(doc.data());
         });
+
+        prices.sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
+        checkins.sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
+
+        pricesEl.innerHTML = "";
+        checkinsEl.innerHTML = "";
+
+        if (prices.length === 0) {
+          pricesEl.innerHTML = `<div class="empty-state">No prices yet.</div>`;
+        } else {
+          prices.slice(0, 20).forEach(price => {
+            const div = document.createElement("div");
+            div.className = "stack-card";
+            div.innerHTML = `
+              <div class="stack-title">${price.pubName || "Unknown pub"}</div>
+              <div class="stack-price">${price.drinkName || "Drink"} • ${formatPrice(price.price)}</div>
+              <div class="stack-meta">${price.note ? price.note + " • " : ""}${formatTimeAgo(price.createdAtMs)}</div>
+            `;
+            pricesEl.appendChild(div);
+          });
+        }
+
+        if (checkins.length === 0) {
+          checkinsEl.innerHTML = `<div class="empty-state">No check-ins yet.</div>`;
+        } else {
+          checkins.slice(0, 20).forEach(checkin => {
+            const div = document.createElement("div");
+            div.className = "stack-card";
+            div.innerHTML = `
+              <div class="stack-title">${checkin.pubName || "Unknown pub"}</div>
+              <div class="stack-meta">User ${(checkin.userId || "unknown").slice(0, 8)} • ${formatTimeAgo(checkin.createdAtMs)}</div>
+            `;
+            checkinsEl.appendChild(div);
+          });
+        }
+      } catch (error) {
+        console.error(error);
+
+        pricesEl.innerHTML = `
+          <div class="empty-state">
+            Could not load prices.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+
+        checkinsEl.innerHTML = `
+          <div class="empty-state">
+            Could not load check-ins.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
       }
     }
 
