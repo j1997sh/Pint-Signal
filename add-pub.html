@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Add a Pub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal 🍺</div>
+        <div class="brand-subtitle">Suggest a new pub</div>
+      </div>
+
+      <nav class="menu">
+        <a href="index.html">Home</a>
+        <a href="passport.html">Passport</a>
+        <a href="activity.html">Activity</a>
+        <a href="leaderboard.html">Leaderboard</a>
+        <a href="add-pub.html">Add a Pub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page page-narrow">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Add a Pub</h2>
+        <p>Suggestions are saved as pending submissions for review</p>
+      </div>
+
+      <div class="info-card">
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Pub name</span>
+            <input id="pubName" type="text" placeholder="e.g. The Sample Arms" />
+          </label>
+
+          <label class="form-field">
+            <span>Area</span>
+            <input id="pubArea" type="text" placeholder="e.g. Westminster" />
+          </label>
+
+          <label class="form-field">
+            <span>Latitude</span>
+            <input id="pubLat" type="number" step="0.000001" placeholder="e.g. 51.500700" />
+          </label>
+
+          <label class="form-field">
+            <span>Longitude</span>
+            <input id="pubLng" type="number" step="0.000001" placeholder="e.g. -0.129000" />
+          </label>
+
+          <label class="form-field full-width">
+            <span>Tags</span>
+            <input id="pubTags" type="text" placeholder="e.g. historic, local, ale" />
+          </label>
+        </div>
+
+        <div class="controls-row">
+          <button onclick="useMyLocation()">Use My Location</button>
+          <button onclick="submitPub()">Submit Pub</button>
+        </div>
+
+        <div id="submitStatus" class="stack-meta form-status">Ready to submit.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Your Recent Suggestions</h2>
+        <p>Saved into <code>pub_submissions</code> in Firebase</p>
+      </div>
+
+      <div id="submissionList" class="stack-list"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+    import {
+      getAuth,
+      signInAnonymously
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
+      authDomain: "pintsignal.firebaseapp.com",
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const submitStatusEl = document.getElementById("submitStatus");
+    const submissionListEl = document.getElementById("submissionList");
+
+    let currentUser = null;
+
+    async function loadUser() {
+      const authResult = await signInAnonymously(auth);
+      currentUser = authResult.user;
+    }
+
+    function getFieldValues() {
+      const name = document.getElementById("pubName").value.trim();
+      const area = document.getElementById("pubArea").value.trim();
+      const lat = Number(document.getElementById("pubLat").value);
+      const lng = Number(document.getElementById("pubLng").value);
+      const tagsRaw = document.getElementById("pubTags").value.trim();
+
+      return {
+        name,
+        area,
+        lat,
+        lng,
+        tags: tagsRaw
+          ? tagsRaw.split(",").map(item => item.trim()).filter(Boolean)
+          : []
+      };
+    }
+
+    async function submitPub() {
+      if (!currentUser) {
+        submitStatusEl.textContent = "User not ready yet.";
+        return;
+      }
+
+      const { name, area, lat, lng, tags } = getFieldValues();
+
+      if (!name) {
+        submitStatusEl.textContent = "Enter a pub name.";
+        return;
+      }
+
+      if (!area) {
+        submitStatusEl.textContent = "Enter an area.";
+        return;
+      }
+
+      if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        submitStatusEl.textContent = "Enter valid coordinates.";
+        return;
+      }
+
+      try {
+        await addDoc(collection(db, "pub_submissions"), {
+          name,
+          area,
+          lat,
+          lng,
+          tags,
+          status: "pending",
+          submittedBy: currentUser.uid,
+          createdAtMs: Date.now()
+        });
+
+        document.getElementById("pubName").value = "";
+        document.getElementById("pubArea").value = "";
+        document.getElementById("pubLat").value = "";
+        document.getElementById("pubLng").value = "";
+        document.getElementById("pubTags").value = "";
+
+        submitStatusEl.textContent = "Pub submitted as pending.";
+        await loadRecentSubmissions();
+      } catch (error) {
+        console.error(error);
+        submitStatusEl.textContent = `Submit failed: ${error.message || "Unknown error"}`;
+      }
+    }
+
+    function useMyLocation() {
+      if (!("geolocation" in navigator)) {
+        submitStatusEl.textContent = "Geolocation is not supported.";
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          document.getElementById("pubLat").value = position.coords.latitude.toFixed(6);
+          document.getElementById("pubLng").value = position.coords.longitude.toFixed(6);
+          submitStatusEl.textContent = "Filled in your current coordinates.";
+        },
+        () => {
+          submitStatusEl.textContent = "Could not get your location.";
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000
+        }
+      );
+    }
+
+    async function loadRecentSubmissions() {
+      submissionListEl.innerHTML = "";
+
+      try {
+        const snap = await getDocs(collection(db, "pub_submissions"));
+        const items = [];
+
+        snap.forEach(doc => {
+          const data = doc.data();
+          if (currentUser && data.submittedBy === currentUser.uid) {
+            items.push(data);
+          }
+        });
+
+        items.sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
+
+        if (items.length === 0) {
+          submissionListEl.innerHTML = `<div class="empty-state">No submissions yet.</div>`;
+          return;
+        }
+
+        items.slice(0, 10).forEach(item => {
+          const div = document.createElement("div");
+          div.className = "stack-card";
+          div.innerHTML = `
+            <div class="stack-title">${item.name}</div>
+            <div class="stack-meta">${item.area} • ${item.status || "pending"}</div>
+            <div class="stack-meta">${(item.tags || []).join(", ")}</div>
+          `;
+          submissionListEl.appendChild(div);
+        });
+      } catch (error) {
+        console.error(error);
+        submissionListEl.innerHTML = `
+          <div class="empty-state">
+            Could not load submissions.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+      }
+    }
+
+    window.submitPub = submitPub;
+    window.useMyLocation = useMyLocation;
+
+    async function start() {
+      await loadUser();
+      await loadRecentSubmissions();
+    }
+
+    start();
+  </script>
+</body>
+</html>
