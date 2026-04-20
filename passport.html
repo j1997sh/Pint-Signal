@@ -4,59 +4,216 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Passport</title>
-
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
-<header class="topbar">
-  <div class="topbar-inner">
-    <div>
-      <div class="brand-title">🪪 Pub Passport</div>
-      <div class="brand-subtitle">Your progress across Westminster</div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">🪪 Pub Passport</div>
+        <div class="brand-subtitle">District progress across Westminster</div>
+      </div>
+
+      <nav class="menu">
+        <a href="index.html">Map</a>
+        <a href="passport.html">Passport</a>
+        <a href="leaderboard.html">Leaderboard</a>
+      </nav>
     </div>
+  </header>
 
-    <nav class="menu">
-      <a href="index.html">Map</a>
-      <a href="passport.html">Passport</a>
-      <a href="leaderboard.html">Leaderboard</a>
-    </nav>
-  </div>
-</header>
+  <main class="page page-narrow">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Your Progress</h2>
+        <p>Overall exploration and district completion</p>
+      </div>
 
-<main class="page page-narrow">
+      <div id="passportStats" class="totaliser-card">Loading...</div>
+    </section>
 
-  <section class="panel">
-    <h2>Your Progress</h2>
-    <p class="stack-meta">Track your uncovered London</p>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>District Progress</h2>
+        <p>Track your progress in each Westminster district</p>
+      </div>
 
-    <div id="progress">Loading...</div>
-  </section>
+      <div id="districtProgress" class="totaliser-card">Loading districts...</div>
+    </section>
 
-</main>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Visited Pubs</h2>
+        <p>Your collected stamps grouped by district</p>
+      </div>
 
-<script type="module">
-import { westminsterPubs } from "./westminster-pubs.js";
+      <div id="visitedGroups" class="stack-list"></div>
+    </section>
+  </main>
 
-const visited = new Set(JSON.parse(localStorage.getItem("visitedPubs") || "[]"));
+  <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
+    import { districts, getDistrictById, getDistrictForPub } from "./districts.js";
 
-const total = westminsterPubs.length;
+    const visitedIds = new Set(JSON.parse(localStorage.getItem("visitedPubs") || "[]"));
 
-document.getElementById("progress").innerHTML = `
-  <div class="mini-stat">
-    <div class="mini-stat-label">Visited</div>
-    <div class="mini-stat-value">${visited.size}</div>
-  </div>
-  <div class="mini-stat">
-    <div class="mini-stat-label">Total</div>
-    <div class="mini-stat-value">${total}</div>
-  </div>
-  <div class="mini-stat">
-    <div class="mini-stat-label">Coverage</div>
-    <div class="mini-stat-value">${((visited.size/total)*100).toFixed(1)}%</div>
-  </div>
-`;
-</script>
+    function getStoredCoords(pubId) {
+      const raw = localStorage.getItem(`pubcoords_${pubId}`);
+      if (!raw) return null;
 
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          !Number.isNaN(parsed.lat) &&
+          !Number.isNaN(parsed.lng)
+        ) {
+          return parsed;
+        }
+      } catch (error) {}
+
+      return null;
+    }
+
+    function hasCoordinates(pub) {
+      return (
+        typeof pub.lat === "number" &&
+        typeof pub.lng === "number" &&
+        !Number.isNaN(pub.lat) &&
+        !Number.isNaN(pub.lng)
+      );
+    }
+
+    function getResolvedPubs() {
+      return westminsterPubs.map(pub => {
+        if (hasCoordinates(pub)) return pub;
+
+        const stored = getStoredCoords(pub.id);
+        if (stored) {
+          return {
+            ...pub,
+            lat: stored.lat,
+            lng: stored.lng
+          };
+        }
+
+        return pub;
+      });
+    }
+
+    const allPubs = getResolvedPubs();
+    const visitedPubs = allPubs.filter(pub => visitedIds.has(pub.id));
+
+    const statsEl = document.getElementById("passportStats");
+    const districtProgressEl = document.getElementById("districtProgress");
+    const visitedGroupsEl = document.getElementById("visitedGroups");
+
+    function renderOverall() {
+      const total = allPubs.length;
+      const visited = visitedPubs.length;
+      const percent = total ? (visited / total) * 100 : 0;
+
+      statsEl.innerHTML = `
+        <div class="hero-badge">Passport</div>
+        <div class="hero-title">${percent.toFixed(1)}% explored</div>
+        <div class="stack-meta">Visited pubs across all current Westminster districts</div>
+
+        <div class="stats-row">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Visited pubs</div>
+            <div class="mini-stat-value">${visited}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Total pubs</div>
+            <div class="mini-stat-value">${total}</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Districts</div>
+            <div class="mini-stat-value">${districts.length}</div>
+          </div>
+        </div>
+
+        <div class="passport-progress-wrap">
+          <div class="passport-progress-bar">
+            <div class="passport-progress-fill" style="width:${percent}%;"></div>
+          </div>
+          <div class="stack-meta">${percent.toFixed(1)}% of the pub world explored</div>
+        </div>
+      `;
+    }
+
+    function renderDistricts() {
+      const rows = districts.map(district => {
+        const districtPubs = allPubs.filter(pub => getDistrictForPub(pub) === district.id);
+        const districtVisited = visitedPubs.filter(pub => getDistrictForPub(pub) === district.id);
+        const percent = districtPubs.length ? (districtVisited.length / districtPubs.length) * 100 : 0;
+
+        return `
+          <div class="district-row">
+            <div class="district-row-top">
+              <div class="district-name-wrap">
+                <span class="district-dot" style="background:${district.color};"></span>
+                <strong>${district.name}</strong>
+              </div>
+              <span class="district-count">${districtVisited.length}/${districtPubs.length}</span>
+            </div>
+
+            <div class="district-meta">${percent.toFixed(1)}% complete</div>
+
+            <div class="district-progress-bar">
+              <div
+                class="district-progress-fill"
+                style="width:${percent}%; background:${district.color};"
+              ></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      districtProgressEl.innerHTML = `
+        <div class="district-list">
+          ${rows}
+        </div>
+      `;
+    }
+
+    function renderVisitedGroups() {
+      if (visitedPubs.length === 0) {
+        visitedGroupsEl.innerHTML = `<div class="empty-state">No pubs visited yet.</div>`;
+        return;
+      }
+
+      visitedGroupsEl.innerHTML = districts.map(district => {
+        const pubs = visitedPubs
+          .filter(pub => getDistrictForPub(pub) === district.id)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        if (pubs.length === 0) return "";
+
+        return `
+          <div class="panel-inline-group">
+            <div class="group-title">
+              <span class="district-dot" style="background:${district.color};"></span>
+              ${district.name}
+            </div>
+
+            <div class="stack-list">
+              ${pubs.map(pub => `
+                <button class="stack-card pub-list-card" onclick="window.location.href='pub.html?id=${encodeURIComponent(pub.id)}'">
+                  <div class="stack-title">${pub.name}</div>
+                  <div class="stack-meta">${pub.address || ""}</div>
+                </button>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    renderOverall();
+    renderDistricts();
+    renderVisitedGroups();
+  </script>
 </body>
 </html>
