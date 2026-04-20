@@ -27,10 +27,17 @@
   <main class="page">
     <section class="panel">
       <div class="panel-header">
+        <h2>Your Totals</h2>
+        <p>Your own pub passport totals and money breakdown</p>
+      </div>
+      <div id="personalTotals" class="passport-summary-card">Loading totals...</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
         <h2>Passport Summary</h2>
         <p>Your visited pubs, progress, and badge tier</p>
       </div>
-
       <div id="passportSummary" class="passport-summary-card">Loading passport...</div>
     </section>
 
@@ -39,7 +46,6 @@
         <h2>Your Badges</h2>
         <p>Unlock more by checking in and submitting prices</p>
       </div>
-
       <div id="badgeRow" class="badge-row"></div>
     </section>
 
@@ -72,38 +78,112 @@
       signInAnonymously
     } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
-    const app = initializeApp({
+    const firebaseConfig = {
       apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
       authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal"
-    });
+      projectId: "pintsignal",
+      storageBucket: "pintsignal.firebasestorage.app",
+      messagingSenderId: "63376472196",
+      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
+    };
 
+    const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
 
+    const personalTotalsEl = document.getElementById("personalTotals");
     const summaryEl = document.getElementById("passportSummary");
     const badgeRowEl = document.getElementById("badgeRow");
     const visitedPubsEl = document.getElementById("visitedPubs");
     const unvisitedPubsEl = document.getElementById("unvisitedPubs");
 
+    function formatMoney(value) {
+      return `£${Number(value).toFixed(2)}`;
+    }
+
     function getBadgeTier(visitedCount, priceCount) {
       const xp = (visitedCount * 10) + (priceCount * 15);
 
-      if (xp >= 300) return { label: "🏆 Pint Legend", subtitle: "You’re becoming a Westminster pub master." };
-      if (xp >= 150) return { label: "🍺 Regular", subtitle: "Solid pub momentum." };
-      if (xp >= 75) return { label: "🧭 Explorer", subtitle: "You’re building a proper pub trail." };
-      return { label: "✨ New Scout", subtitle: "Start collecting your first stamps." };
+      if (xp >= 300) {
+        return {
+          label: "🏆 Pint Legend",
+          subtitle: "You’re becoming a Westminster pub master."
+        };
+      }
+
+      if (xp >= 150) {
+        return {
+          label: "🍺 Regular",
+          subtitle: "Solid pub momentum."
+        };
+      }
+
+      if (xp >= 75) {
+        return {
+          label: "🧭 Explorer",
+          subtitle: "You’re building a proper pub trail."
+        };
+      }
+
+      return {
+        label: "✨ New Scout",
+        subtitle: "Start collecting your first stamps."
+      };
     }
 
     function buildBadgeData(visitedCount, priceCount, totalPubs) {
       return [
-        { emoji: visitedCount >= 1 ? "✅" : "⬜", title: "First Stamp", unlocked: visitedCount >= 1 },
-        { emoji: visitedCount >= 3 ? "✅" : "⬜", title: "3 Pubs Visited", unlocked: visitedCount >= 3 },
-        { emoji: visitedCount >= 5 ? "✅" : "⬜", title: "5 Pubs Visited", unlocked: visitedCount >= 5 },
-        { emoji: priceCount >= 1 ? "✅" : "⬜", title: "Price Scout", unlocked: priceCount >= 1 },
-        { emoji: priceCount >= 5 ? "✅" : "⬜", title: "Price Machine", unlocked: priceCount >= 5 },
-        { emoji: visitedCount === totalPubs && totalPubs > 0 ? "🏁" : "⬜", title: "Westminster Complete", unlocked: visitedCount === totalPubs && totalPubs > 0 }
+        {
+          emoji: visitedCount >= 1 ? "✅" : "⬜",
+          title: "First Stamp",
+          unlocked: visitedCount >= 1
+        },
+        {
+          emoji: visitedCount >= 3 ? "✅" : "⬜",
+          title: "3 Pubs Visited",
+          unlocked: visitedCount >= 3
+        },
+        {
+          emoji: visitedCount >= 5 ? "✅" : "⬜",
+          title: "5 Pubs Visited",
+          unlocked: visitedCount >= 5
+        },
+        {
+          emoji: priceCount >= 1 ? "✅" : "⬜",
+          title: "Price Scout",
+          unlocked: priceCount >= 1
+        },
+        {
+          emoji: priceCount >= 5 ? "✅" : "⬜",
+          title: "Price Machine",
+          unlocked: priceCount >= 5
+        },
+        {
+          emoji: visitedCount === totalPubs && totalPubs > 0 ? "🏁" : "⬜",
+          title: "Westminster Complete",
+          unlocked: visitedCount === totalPubs && totalPubs > 0
+        }
       ];
+    }
+
+    function calculatePintEconomics(salePrice) {
+      const price = Number(salePrice);
+      const vat = price * 0.20;
+      const beerDuty = 0.60;
+      const beerCost = 1.50;
+      const overheads = 3.00;
+      const governmentRevenue = vat + beerDuty;
+      const pubProfit = price - vat - beerDuty - beerCost - overheads;
+
+      return {
+        salePrice: price,
+        vat,
+        beerDuty,
+        beerCost,
+        overheads,
+        governmentRevenue,
+        pubProfit
+      };
     }
 
     function createStampCard(pub, visited) {
@@ -126,99 +206,189 @@
     }
 
     async function load() {
-      const authResult = await signInAnonymously(auth);
-      const uid = authResult.user.uid;
+      try {
+        const authResult = await signInAnonymously(auth);
+        const uid = authResult.user.uid;
 
-      const pubsSnap = await getDocs(collection(db, "pubs"));
-      const checkinsSnap = await getDocs(collection(db, "checkins"));
-      const pricesSnap = await getDocs(collection(db, "prices"));
+        const pubsSnap = await getDocs(collection(db, "pubs"));
+        const checkinsSnap = await getDocs(collection(db, "checkins"));
+        const pricesSnap = await getDocs(collection(db, "prices"));
 
-      const visited = new Set();
-      let myPriceCount = 0;
+        const visited = new Set();
+        let myPriceCount = 0;
+        let totalSpent = 0;
+        let totalPubProfit = 0;
+        let totalGovernmentRevenue = 0;
 
-      checkinsSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.userId === uid) visited.add(data.pubId);
-      });
+        checkinsSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.userId === uid && data.pubId) {
+            visited.add(data.pubId);
+          }
+        });
 
-      pricesSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.userId === uid) myPriceCount++;
-      });
+        pricesSnap.forEach(doc => {
+          const data = doc.data();
 
-      const pubs = [];
-      pubsSnap.forEach(doc => {
-        pubs.push({ id: doc.id, ...doc.data() });
-      });
+          if (data.userId === uid) {
+            myPriceCount++;
+            const price = Number(data.price || 0);
+            totalSpent += price;
 
-      const visitedCount = visited.size;
-      const totalPubs = pubs.length;
-      const progressPercent = totalPubs === 0 ? 0 : Math.round((visitedCount / totalPubs) * 100);
-      const xp = (visitedCount * 10) + (myPriceCount * 15);
-      const tier = getBadgeTier(visitedCount, myPriceCount);
+            const economics = calculatePintEconomics(price);
+            totalPubProfit += economics.pubProfit;
+            totalGovernmentRevenue += economics.governmentRevenue;
+          }
+        });
 
-      summaryEl.innerHTML = `
-        <div class="passport-hero-row">
-          <div>
-            <div class="hero-badge">${tier.label}</div>
-            <div class="hero-title">${visitedCount} / ${totalPubs} pubs stamped</div>
-            <div class="stack-meta">${tier.subtitle}</div>
+        const pubs = [];
+        pubsSnap.forEach(doc => {
+          pubs.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+
+        const visitedCount = visited.size;
+        const totalPubs = pubs.length;
+        const progressPercent = totalPubs === 0 ? 0 : Math.round((visitedCount / totalPubs) * 100);
+        const xp = (visitedCount * 10) + (myPriceCount * 15);
+        const tier = getBadgeTier(visitedCount, myPriceCount);
+
+        personalTotalsEl.innerHTML = `
+          <div class="passport-hero-row">
+            <div>
+              <div class="hero-badge">Your Totals</div>
+              <div class="hero-title">${myPriceCount} pints logged</div>
+              <div class="stack-meta">Based on your submitted prices</div>
+            </div>
+            <div class="passport-xp-pill">${xp} XP</div>
           </div>
-          <div class="passport-xp-pill">${xp} XP</div>
-        </div>
 
-        <div class="passport-progress-wrap">
-          <div class="passport-progress-bar">
-            <div class="passport-progress-fill" style="width:${progressPercent}%"></div>
+          <div class="stats-row">
+            <div class="mini-stat">
+              <div class="mini-stat-label">Total spent</div>
+              <div class="mini-stat-value">${formatMoney(totalSpent)}</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">Est. pub side</div>
+              <div class="mini-stat-value">${formatMoney(totalPubProfit)}</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">Government take</div>
+              <div class="mini-stat-value">${formatMoney(totalGovernmentRevenue)}</div>
+            </div>
           </div>
-          <div class="stack-meta">${progressPercent}% complete</div>
-        </div>
 
-        <div class="stats-row">
-          <div class="mini-stat">
-            <div class="mini-stat-label">Visited</div>
-            <div class="mini-stat-value">${visitedCount}</div>
+          <div class="comparison-line" style="margin-top:14px;">
+            Pub side <strong>${formatMoney(totalPubProfit)}</strong> vs Government <strong>${formatMoney(totalGovernmentRevenue)}</strong> across your logged pints
           </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Prices</div>
-            <div class="mini-stat-value">${myPriceCount}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Remaining</div>
-            <div class="mini-stat-value">${Math.max(totalPubs - visitedCount, 0)}</div>
-          </div>
-        </div>
-      `;
-
-      const badges = buildBadgeData(visitedCount, myPriceCount, totalPubs);
-      badgeRowEl.innerHTML = "";
-
-      badges.forEach(badge => {
-        const el = document.createElement("div");
-        el.className = badge.unlocked ? "badge-card unlocked" : "badge-card locked";
-        el.innerHTML = `
-          <div class="badge-emoji">${badge.emoji}</div>
-          <div class="badge-title">${badge.title}</div>
         `;
-        badgeRowEl.appendChild(el);
-      });
 
-      visitedPubsEl.innerHTML = "";
-      unvisitedPubsEl.innerHTML = "";
+        summaryEl.innerHTML = `
+          <div class="passport-hero-row">
+            <div>
+              <div class="hero-badge">${tier.label}</div>
+              <div class="hero-title">${visitedCount} / ${totalPubs} pubs stamped</div>
+              <div class="stack-meta">${tier.subtitle}</div>
+            </div>
+            <div class="passport-xp-pill">${xp} XP</div>
+          </div>
 
-      const visitedPubs = pubs.filter(pub => visited.has(pub.id));
-      const unvisitedPubs = pubs.filter(pub => !visited.has(pub.id));
+          <div class="passport-progress-wrap">
+            <div class="passport-progress-bar">
+              <div class="passport-progress-fill" style="width:${progressPercent}%"></div>
+            </div>
+            <div class="stack-meta">${progressPercent}% complete</div>
+          </div>
 
-      if (visitedPubs.length === 0) {
-        visitedPubsEl.innerHTML = `<div class="empty-state">No passport stamps yet. Go check into your first pub.</div>`;
-      } else {
-        visitedPubs.forEach(pub => visitedPubsEl.appendChild(createStampCard(pub, true)));
-      }
+          <div class="stats-row">
+            <div class="mini-stat">
+              <div class="mini-stat-label">Visited</div>
+              <div class="mini-stat-value">${visitedCount}</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">Prices</div>
+              <div class="mini-stat-value">${myPriceCount}</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">Remaining</div>
+              <div class="mini-stat-value">${Math.max(totalPubs - visitedCount, 0)}</div>
+            </div>
+          </div>
+        `;
 
-      if (unvisitedPubs.length === 0) {
-        unvisitedPubsEl.innerHTML = `<div class="empty-state">You’ve visited every loaded pub. Legend.</div>`;
-      } else {
-        unvisitedPubs.forEach(pub => unvisitedPubsEl.appendChild(createStampCard(pub, false)));
+        const badges = buildBadgeData(visitedCount, myPriceCount, totalPubs);
+        badgeRowEl.innerHTML = "";
+
+        badges.forEach(badge => {
+          const el = document.createElement("div");
+          el.className = badge.unlocked ? "badge-card unlocked" : "badge-card locked";
+          el.innerHTML = `
+            <div class="badge-emoji">${badge.emoji}</div>
+            <div class="badge-title">${badge.title}</div>
+          `;
+          badgeRowEl.appendChild(el);
+        });
+
+        visitedPubsEl.innerHTML = "";
+        unvisitedPubsEl.innerHTML = "";
+
+        const visitedPubs = pubs.filter(pub => visited.has(pub.id));
+        const unvisitedPubs = pubs.filter(pub => !visited.has(pub.id));
+
+        if (visitedPubs.length === 0) {
+          visitedPubsEl.innerHTML = `<div class="empty-state">No passport stamps yet. Go check into your first pub.</div>`;
+        } else {
+          visitedPubs.forEach(pub => {
+            visitedPubsEl.appendChild(createStampCard(pub, true));
+          });
+        }
+
+        if (unvisitedPubs.length === 0) {
+          unvisitedPubsEl.innerHTML = `<div class="empty-state">You’ve visited every loaded pub. Legend.</div>`;
+        } else {
+          unvisitedPubs.forEach(pub => {
+            unvisitedPubsEl.appendChild(createStampCard(pub, false));
+          });
+        }
+      } catch (error) {
+        console.error(error);
+
+        personalTotalsEl.innerHTML = `
+          <div class="empty-state">
+            Could not load your totals.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+
+        summaryEl.innerHTML = `
+          <div class="empty-state">
+            Could not load passport summary.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+
+        badgeRowEl.innerHTML = `
+          <div class="empty-state">
+            Could not load badges.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+
+        visitedPubsEl.innerHTML = `
+          <div class="empty-state">
+            Could not load visited pubs.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
+
+        unvisitedPubsEl.innerHTML = `
+          <div class="empty-state">
+            Could not load unvisited pubs.<br>
+            ${error.message || "Unknown error"}
+          </div>
+        `;
       }
     }
 
