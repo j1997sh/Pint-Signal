@@ -53,10 +53,7 @@ export function inferDistrictFromPostcode(postcode = "") {
     return "westminster-victoria";
   }
 
-  if (
-    pc.startsWith("SW1A") ||
-    pc.startsWith("SW1Y")
-  ) {
+  if (pc.startsWith("SW1A") || pc.startsWith("SW1Y")) {
     return "whitehall-st-jamess";
   }
 
