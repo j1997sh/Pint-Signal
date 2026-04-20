@@ -4,618 +4,242 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pint Signal</title>
+
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
+
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div>
-        <div class="brand-title">Pint Signal 🍺</div>
-        <div class="brand-subtitle">Uncovered London</div>
-      </div>
-
-      <nav class="menu">
-        <a href="index.html">Home</a>
-        <a href="passport.html">Passport</a>
-        <a href="activity.html">Activity</a>
-        <a href="leaderboard.html">Leaderboard</a>
-        <a href="add-pub.html">Add a Pub</a>
-        <a href="calculator.html">Calculator</a>
-      </nav>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <div class="brand-title">Pint Signal 🍺</div>
+      <div class="brand-subtitle">Signal Network</div>
     </div>
-  </header>
 
-  <main class="page">
-    <section class="panel map-panel">
-      <div class="panel-header">
-        <h2>Uncovered London</h2>
-        <p>Check into pubs to reveal Westminster</p>
-      </div>
+    <nav class="menu">
+      <a href="index.html">Home</a>
+      <a href="passport.html">Passport</a>
+      <a href="leaderboard.html">Leaderboard</a>
+    </nav>
+  </div>
+</header>
 
-      <div class="map-shell">
-        <div id="map"></div>
-        <div class="map-overlay-vignette"></div>
-        <div class="map-overlay-noise"></div>
-      </div>
+<main class="page">
 
-      <div class="controls-row">
-        <button onclick="centerOnUser()">Center On Me</button>
-        <button onclick="geocodeAllPubs()">Load All Pub Coordinates</button>
-      </div>
+  <section class="panel map-panel">
+    <div class="panel-header">
+      <h2>Signal Network</h2>
+      <p>Activate signals to reveal pubs</p>
+    </div>
 
-      <div id="mapStatus" class="stack-meta top-gap">Ready.</div>
-    </section>
+    <div class="map-shell">
+      <div id="map"></div>
+      <div class="map-overlay-vignette"></div>
+    </div>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Uncovered London</h2>
-        <p>Reveal circles appear when you first check in at a pub</p>
-      </div>
-      <div id="coverageCard" class="totaliser-card">Loading coverage...</div>
-    </section>
+    <div class="controls-row">
+      <button onclick="centerOnUser()">Center</button>
+    </div>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Westminster Pub Dataset</h2>
-        <p>Your imported pub list from <code>westminster-pubs.js</code></p>
-      </div>
-      <div id="datasetCard" class="totaliser-card">Loading pub dataset...</div>
-    </section>
+    <div id="mapStatus" class="stack-meta top-gap">Move to a signal to unlock it</div>
+  </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Community Totaliser</h2>
-        <p>What all logged pints add up to across the app</p>
-      </div>
-      <div id="communityTotals" class="totaliser-card">Loading totals...</div>
-    </section>
+</main>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Cheap Pint Radar</h2>
-        <p>The lowest recent pint prices we know about</p>
-      </div>
-      <div id="cheapest" class="stack-list"></div>
-    </section>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <section class="panel">
-      <div class="panel-header">
-        <h2>Quick Links</h2>
-        <p>Jump straight into the big features</p>
-      </div>
-      <div class="quick-link-grid">
-        <a class="quick-link-card" href="passport.html">
-          <div class="quick-link-emoji">🪪</div>
-          <div class="quick-link-title">Pub Passport</div>
-          <div class="quick-link-text">Track visited pubs and your uncovering progress.</div>
-        </a>
+<script type="module">
+import { westminsterPubs } from "./westminster-pubs.js";
 
-        <a class="quick-link-card" href="leaderboard.html">
-          <div class="quick-link-emoji">🏆</div>
-          <div class="quick-link-title">Price Leaderboard</div>
-          <div class="quick-link-text">See the cheapest pints and top value pubs.</div>
-        </a>
+/* =========================
+   SIGNAL DATA
+========================= */
 
-        <a class="quick-link-card" href="add-pub.html">
-          <div class="quick-link-emoji">➕</div>
-          <div class="quick-link-title">Add a Pub</div>
-          <div class="quick-link-text">Suggest a new pub for the map.</div>
-        </a>
+const signals = [
+  { id:"parliament", name:"Parliament", lat:51.4995, lng:-0.1248 },
+  { id:"trafalgar", lat:51.5080, lng:-0.1281 },
+  { id:"bridge", lat:51.5009, lng:-0.1217 },
+  { id:"green", lat:51.5065, lng:-0.1426 },
+  { id:"buckingham", lat:51.5014, lng:-0.1419 },
+  { id:"leicester", lat:51.5113, lng:-0.1281 },
+  { id:"soho", lat:51.5136, lng:-0.1365 },
+  { id:"waterloo", lat:51.5033, lng:-0.1147 },
+  { id:"vauxhall", lat:51.4866, lng:-0.1225 },
+  { id:"victoria", lat:51.4952, lng:-0.1442 }
+];
 
-        <a class="quick-link-card" href="calculator.html">
-          <div class="quick-link-emoji">🧮</div>
-          <div class="quick-link-title">Pint Calculator</div>
-          <div class="quick-link-text">See where the money goes for a pint.</div>
-        </a>
-      </div>
-    </section>
-  </main>
+/* =========================
+   CONFIG
+========================= */
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+const SIGNAL_RADIUS = 450;
+const UNLOCK_DISTANCE = 50;
 
-  <script type="module">
-    import { westminsterPubs } from "./westminster-pubs.js";
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      getDocs
-    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-    import {
-      getAuth,
-      signInAnonymously
-    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+/* =========================
+   STATE
+========================= */
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBajTBhYOCXbprdx9ZhxpFny_knmTHstnA",
-      authDomain: "pintsignal.firebaseapp.com",
-      projectId: "pintsignal",
-      storageBucket: "pintsignal.firebasestorage.app",
-      messagingSenderId: "63376472196",
-      appId: "1:63376472196:web:2a5bbd8aa62ca176cf6ad1"
-    };
+let unlockedSignals = new Set(
+  JSON.parse(localStorage.getItem("signals") || "[]")
+);
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
+let map = L.map("map").setView([51.5007, -0.129], 14);
 
-    const datasetCardEl = document.getElementById("datasetCard");
-    const communityTotalsEl = document.getElementById("communityTotals");
-    const coverageCardEl = document.getElementById("coverageCard");
-    const cheapestEl = document.getElementById("cheapest");
-    const mapStatusEl = document.getElementById("mapStatus");
+let userPos = null;
+let userMarker = null;
 
-    const REVEAL_RADIUS_METERS = 200;
+let signalMarkers = [];
+let pubMarkers = [];
 
-    let map = L.map("map", {
-      zoomControl: true,
-      preferCanvas: true
-    }).setView([51.5007, -0.1290], 14);
+/* =========================
+   MAP BASE
+========================= */
 
-    let userLatLng = null;
-    let userMarker = null;
-    let pubMarkers = [];
-    let revealCircles = [];
-    let glowCircles = [];
-    let visitedPubIds = new Set();
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+).addTo(map);
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: "&copy; OpenStreetMap & CARTO",
-      maxZoom: 19
+/* =========================
+   USER LOCATION
+========================= */
+
+navigator.geolocation.watchPosition(pos => {
+  userPos = [pos.coords.latitude, pos.coords.longitude];
+
+  if (!userMarker) {
+    userMarker = L.marker(userPos).addTo(map);
+  } else {
+    userMarker.setLatLng(userPos);
+  }
+});
+
+/* =========================
+   SIGNALS
+========================= */
+
+function renderSignals() {
+  signalMarkers.forEach(m => map.removeLayer(m));
+  signalMarkers = [];
+
+  signals.forEach(s => {
+    const unlocked = unlockedSignals.has(s.id);
+
+    const marker = L.marker([s.lat, s.lng], {
+      icon: L.divIcon({
+        html:`<div class="signal ${unlocked ? "on":""}">📡</div>`
+      })
     }).addTo(map);
 
-    function createPintIcon(isVisited) {
-      return L.divIcon({
-        html: `<div class="pint-marker-inner ${isVisited ? "pint-marker-visited" : "pint-marker-default"}">🍺</div>`,
-        className: "pint-marker",
-        iconSize: [36, 36],
-        iconAnchor: [18, 28]
-      });
+    marker.on("click", () => unlockSignal(s));
+
+    signalMarkers.push(marker);
+
+    if (unlocked) {
+      L.circle([s.lat, s.lng], {
+        radius: SIGNAL_RADIUS,
+        color:"#ffd27a",
+        fillOpacity:0.15
+      }).addTo(map);
     }
+  });
+}
 
-    function formatMoney(value) {
-      return `£${Number(value).toFixed(2)}`;
-    }
-
-    function formatPrice(value) {
-      return `£${Number(value).toFixed(2)}`;
-    }
-
-    function calculatePintEconomics(salePrice) {
-      const price = Number(salePrice);
-      const vat = price * 0.20;
-      const beerDuty = 0.60;
-      const beerCost = 1.50;
-      const overheads = 3.00;
-      const governmentRevenue = vat + beerDuty;
-      const pubSurplus = price - vat - beerDuty - beerCost - overheads;
-
-      return {
-        salePrice: price,
-        governmentRevenue,
-        pubSurplus
-      };
-    }
-
-    function buildSimpleSplitBar(government, pubSide) {
-      const gov = Math.max(Number(government || 0), 0);
-      const pub = Math.max(Number(pubSide || 0), 0);
-      const total = gov + pub;
-
-      const govWidth = total > 0 ? (gov / total) * 100 : 50;
-      const pubWidth = total > 0 ? (pub / total) * 100 : 50;
-
-      return `
-        <div class="simple-split-bar">
-          <div class="simple-split-gov" style="width:${govWidth}%"></div>
-          <div class="simple-split-pub" style="width:${pubWidth}%"></div>
-        </div>
-      `;
-    }
-
-    function hasCoordinates(pub) {
-      return (
-        typeof pub.lat === "number" &&
-        typeof pub.lng === "number" &&
-        !Number.isNaN(pub.lat) &&
-        !Number.isNaN(pub.lng)
-      );
-    }
-
-    function getStoredCoords(pubId) {
-      const raw = localStorage.getItem(`pubcoords_${pubId}`);
-      if (!raw) return null;
-
-      try {
-        const parsed = JSON.parse(raw);
-        if (
-          typeof parsed.lat === "number" &&
-          typeof parsed.lng === "number" &&
-          !Number.isNaN(parsed.lat) &&
-          !Number.isNaN(parsed.lng)
-        ) {
-          return parsed;
-        }
-      } catch (e) {}
-
-      return null;
-    }
-
-    function setStoredCoords(pubId, lat, lng) {
-      localStorage.setItem(`pubcoords_${pubId}`, JSON.stringify({ lat, lng }));
-    }
-
-    function getResolvedPubs() {
-      return westminsterPubs.map(pub => {
-        if (hasCoordinates(pub)) return pub;
-
-        const stored = getStoredCoords(pub.id);
-        if (stored) {
-          return {
-            ...pub,
-            lat: stored.lat,
-            lng: stored.lng
-          };
-        }
-
-        return pub;
-      });
-    }
-
-    function clearPubMarkers() {
-      pubMarkers.forEach(marker => map.removeLayer(marker));
-      pubMarkers = [];
-    }
-
-    function clearRevealCircles() {
-      revealCircles.forEach(circle => map.removeLayer(circle));
-      revealCircles = [];
-
-      glowCircles.forEach(circle => map.removeLayer(circle));
-      glowCircles = [];
-    }
-
-    function renderRevealCircles() {
-      clearRevealCircles();
-
-      const pubs = getResolvedPubs();
-      const visitedPubs = pubs.filter(pub => hasCoordinates(pub) && visitedPubIds.has(pub.id));
-
-      visitedPubs.forEach(pub => {
-        const glow = L.circle([pub.lat, pub.lng], {
-          radius: REVEAL_RADIUS_METERS * 1.25,
-          stroke: false,
-          fillColor: "#ffd27a",
-          fillOpacity: 0.08,
-          interactive: false
-        }).addTo(map);
-
-        const circle = L.circle([pub.lat, pub.lng], {
-          radius: REVEAL_RADIUS_METERS,
-          color: "#ffb347",
-          weight: 1,
-          fillColor: "#ffd27a",
-          fillOpacity: 0.18,
-          interactive: false
-        }).addTo(map);
-
-        glowCircles.push(glow);
-        revealCircles.push(circle);
-      });
-    }
-
-    function renderPubsOnMap() {
-      clearPubMarkers();
-
-      const pubs = getResolvedPubs();
-      const mappablePubs = pubs.filter(hasCoordinates);
-
-      mappablePubs.forEach(pub => {
-        const isVisited = visitedPubIds.has(pub.id);
-
-        const marker = L.marker([pub.lat, pub.lng], {
-          icon: createPintIcon(isVisited)
-        }).addTo(map);
-
-        marker.bindPopup(`
-          <div style="min-width:180px;">
-            <strong>${pub.name}</strong><br>
-            ${pub.address || ""}<br>
-            ${pub.postcode || ""}<br>
-            <span style="color:${isVisited ? "#ffd27a" : "#b5b5b5"};">
-              ${isVisited ? "Visited ✓" : "Not visited yet"}
-            </span>
-          </div>
-        `);
-
-        marker.on("click", () => {
-          window.location.href = `pub.html?id=${encodeURIComponent(pub.id)}`;
-        });
-
-        pubMarkers.push(marker);
-      });
-
-      renderDatasetCard();
-      renderRevealCircles();
-    }
-
-    function renderDatasetCard() {
-      const pubs = getResolvedPubs();
-      const total = pubs.length;
-      const mapped = pubs.filter(hasCoordinates).length;
-      const missing = total - mapped;
-
-      datasetCardEl.innerHTML = `
-        <div class="totaliser-top">
-          <div>
-            <div class="hero-badge">Imported File</div>
-            <div class="hero-title">${total} Westminster pubs</div>
-            <div class="stack-meta">Loaded from <code>westminster-pubs.js</code></div>
-          </div>
-        </div>
-
-        <div class="stats-row">
-          <div class="mini-stat">
-            <div class="mini-stat-label">Total pubs</div>
-            <div class="mini-stat-value">${total}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Map-ready</div>
-            <div class="mini-stat-value">${mapped}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Need coordinates</div>
-            <div class="mini-stat-value">${missing}</div>
-          </div>
-        </div>
-
-        <div class="comparison-line compact">
-          No square boundary now — the map reveal is driven by glowing pub discovery circles.
-        </div>
-      `;
-    }
-
-    function renderCoverageCard() {
-      const pubs = getResolvedPubs();
-      const visitedMappable = pubs.filter(pub => hasCoordinates(pub) && visitedPubIds.has(pub.id));
-
-      const estimatedAreaKm2 = ((visitedMappable.length * Math.PI * REVEAL_RADIUS_METERS * REVEAL_RADIUS_METERS) / 1000000) * 0.7;
-
-      coverageCardEl.innerHTML = `
-        <div class="totaliser-top">
-          <div>
-            <div class="hero-badge">Uncovered London</div>
-            <div class="hero-title">${visitedMappable.length} reveal circles</div>
-            <div class="stack-meta">Each unique pub check-in reveals ${REVEAL_RADIUS_METERS}m</div>
-          </div>
-        </div>
-
-        <div class="stats-row">
-          <div class="mini-stat">
-            <div class="mini-stat-label">Visited pubs</div>
-            <div class="mini-stat-value">${visitedPubIds.size}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Mapped visits</div>
-            <div class="mini-stat-value">${visitedMappable.length}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Est. revealed area</div>
-            <div class="mini-stat-value">${estimatedAreaKm2.toFixed(2)} km²</div>
-          </div>
-        </div>
-
-        <div class="comparison-line compact">
-          The map is now atmospheric and open-ended. Your Passport still tracks the personal percentage.
-        </div>
-      `;
-    }
-
-    async function geocodePub(pub) {
-      const query = encodeURIComponent(`${pub.address}, ${pub.postcode || ""}, London`);
-      const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=jsonv2&limit=1`;
-
-      const response = await fetch(url, {
-        headers: {
-          "Accept": "application/json"
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Geocoder returned ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!Array.isArray(data) || data.length === 0) {
-        return null;
-      }
-
-      return {
-        lat: parseFloat(data[0].lat),
-        lng: parseFloat(data[0].lon)
-      };
-    }
-
-    async function geocodeAllPubs() {
-      const pubs = getResolvedPubs();
-      const missingPubs = pubs.filter(pub => !hasCoordinates(pub));
-
-      if (missingPubs.length === 0) {
-        mapStatusEl.textContent = "All pubs already have coordinates.";
-        renderPubsOnMap();
-        renderCoverageCard();
-        return;
-      }
-
-      mapStatusEl.textContent = `Loading coordinates for ${missingPubs.length} pubs. Keep this tab open.`;
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (let i = 0; i < missingPubs.length; i++) {
-        const pub = missingPubs[i];
-        mapStatusEl.textContent = `Geocoding ${i + 1} / ${missingPubs.length}: ${pub.name}`;
-
-        try {
-          const coords = await geocodePub(pub);
-
-          if (coords && !Number.isNaN(coords.lat) && !Number.isNaN(coords.lng)) {
-            setStoredCoords(pub.id, coords.lat, coords.lng);
-            successCount++;
-          } else {
-            failCount++;
-          }
-        } catch (error) {
-          console.error("Geocode failed for", pub.name, error);
-          failCount++;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 1100));
-      }
-
-      renderPubsOnMap();
-      renderCoverageCard();
-      mapStatusEl.textContent = `Done. Added ${successCount} pub coordinates. Failed: ${failCount}.`;
-    }
-
-    async function loadVisitedPubIds() {
-      visitedPubIds = new Set();
-
-      const authResult = await signInAnonymously(auth);
-      const currentUser = authResult.user;
-
-      const checkSnap = await getDocs(collection(db, "checkins"));
-      checkSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.userId === currentUser.uid && data.pubId) {
-          visitedPubIds.add(data.pubId);
-        }
-      });
-    }
-
-    async function loadCommunityData() {
-      const priceSnap = await getDocs(collection(db, "prices"));
-      const prices = [];
-
-      let totalSpent = 0;
-      let totalGovernmentRevenue = 0;
-      let totalPubSurplus = 0;
-
-      priceSnap.forEach(doc => {
-        const data = doc.data();
-        prices.push(data);
-
-        const price = Number(data.price || 0);
-        totalSpent += price;
-
-        const economics = calculatePintEconomics(price);
-        totalGovernmentRevenue += economics.governmentRevenue;
-        totalPubSurplus += economics.pubSurplus;
-      });
-
-      communityTotalsEl.innerHTML = `
-        <div class="totaliser-top">
-          <div>
-            <div class="hero-badge">Community Totaliser</div>
-            <div class="hero-title">${prices.length} pints logged</div>
-            <div class="stack-meta">Tracked by the Pint Signal community</div>
-          </div>
-        </div>
-
-        <div class="stats-row">
-          <div class="mini-stat">
-            <div class="mini-stat-label">Spend tracked</div>
-            <div class="mini-stat-value">${formatMoney(totalSpent)}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Government</div>
-            <div class="mini-stat-value">${formatMoney(totalGovernmentRevenue)}</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">Pub side</div>
-            <div class="mini-stat-value">${formatMoney(totalPubSurplus)}</div>
-          </div>
-        </div>
-
-        ${buildSimpleSplitBar(totalGovernmentRevenue, totalPubSurplus)}
-
-        <div class="comparison-line compact">
-          Government <strong>${formatMoney(totalGovernmentRevenue)}</strong> vs Pub side <strong>${formatMoney(totalPubSurplus)}</strong>
-        </div>
-      `;
-
-      prices.sort((a, b) => Number(a.price) - Number(b.price));
-
-      cheapestEl.innerHTML = "";
-
-      if (prices.length === 0) {
-        cheapestEl.innerHTML = `<div class="empty-state">No prices submitted yet.</div>`;
-      } else {
-        prices.slice(0, 5).forEach(price => {
-          const economics = calculatePintEconomics(price.price);
-
-          const card = document.createElement("button");
-          card.className = "stack-card pub-list-card";
-          card.type = "button";
-
-          card.innerHTML = `
-            <div class="stack-title">${price.pubName || "Unknown pub"}</div>
-            <div class="stack-price">${price.drinkName || "Drink"} • ${formatPrice(price.price)}</div>
-            <div class="radar-compare">
-              Pub side <strong>${formatMoney(economics.pubSurplus)}</strong> vs Government <strong>${formatMoney(economics.governmentRevenue)}</strong>
-            </div>
-          `;
-
-          if (price.pubId) {
-            card.addEventListener("click", () => {
-              window.location.href = `pub.html?id=${price.pubId}`;
-            });
-          }
-
-          cheapestEl.appendChild(card);
-        });
-      }
-    }
-
-    navigator.geolocation.watchPosition(
-      position => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        userLatLng = [lat, lng];
-
-        if (!userMarker) {
-          userMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here");
-        } else {
-          userMarker.setLatLng([lat, lng]);
-        }
-      },
-      () => {},
-      {
-        enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 10000
-      }
-    );
-
-    function centerOnUser() {
-      if (!userLatLng) return;
-      map.setView(userLatLng, 16);
-    }
-
-    window.centerOnUser = centerOnUser;
-    window.geocodeAllPubs = geocodeAllPubs;
-
-    async function start() {
-      await loadVisitedPubIds();
-      renderDatasetCard();
-      renderPubsOnMap();
-      renderCoverageCard();
-      await loadCommunityData();
-    }
-
-    start();
-  </script>
+/* =========================
+   UNLOCK
+========================= */
+
+function unlockSignal(signal) {
+  if (!userPos) {
+    status("Enable location");
+    return;
+  }
+
+  const dist = map.distance(userPos, [signal.lat, signal.lng]);
+
+  if (dist > UNLOCK_DISTANCE) {
+    status("Move closer (" + Math.round(dist) + "m)");
+    return;
+  }
+
+  if (!unlockedSignals.has(signal.id)) {
+    unlockedSignals.add(signal.id);
+    localStorage.setItem("signals", JSON.stringify([...unlockedSignals]));
+
+    status("Signal unlocked ✔");
+
+    renderAll();
+  }
+}
+
+/* =========================
+   PUB VISIBILITY
+========================= */
+
+function isVisible(pub) {
+  return signals.some(s => {
+    if (!unlockedSignals.has(s.id)) return false;
+
+    return map.distance([pub.lat,pub.lng],[s.lat,s.lng]) < SIGNAL_RADIUS;
+  });
+}
+
+/* =========================
+   PUBS
+========================= */
+
+function renderPubs() {
+  pubMarkers.forEach(m => map.removeLayer(m));
+  pubMarkers = [];
+
+  westminsterPubs.forEach(pub => {
+
+    if (!pub.lat || !isVisible(pub)) return;
+
+    const marker = L.marker([pub.lat, pub.lng], {
+      icon: L.divIcon({
+        html:`<div class="pint">🍺</div>`
+      })
+    }).addTo(map);
+
+    marker.on("click", () => {
+      window.location.href = "pub.html?id=" + pub.id;
+    });
+
+    pubMarkers.push(marker);
+  });
+}
+
+/* =========================
+   UI
+========================= */
+
+function status(msg){
+  document.getElementById("mapStatus").innerText = msg;
+}
+
+function centerOnUser(){
+  if(userPos) map.setView(userPos,16);
+}
+
+window.centerOnUser = centerOnUser;
+
+/* =========================
+   RENDER
+========================= */
+
+function renderAll(){
+  renderSignals();
+  renderPubs();
+}
+
+/* =========================
+   START
+========================= */
+
+renderAll();
+
+</script>
+
 </body>
 </html>
