@@ -2,8 +2,10 @@
 <html>
 <head>
   <title>Pint Signal</title>
+
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
 </head>
 <body>
 
@@ -17,71 +19,170 @@
 </div>
 
 <div id="map"></div>
-<div class="map-fog"></div>
 
-<div class="panel-floating" id="uiCard">
+<div class="panel-floating">
   <div class="panel-title">Signal Network</div>
-  <div class="panel-sub">Unlock districts to reveal pubs</div>
+  <div id="signalText">0 / 3 Signals</div>
 
-  <div id="progressText">0 Signals Active</div>
+  <div class="panel-sub">XP: <span id="xp">0</span></div>
 
   <div class="progress-bar">
-    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    <div class="progress-fill" id="progress"></div>
   </div>
-
-  <button onclick="centerOnUser()">Center on me</button>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-let map = L.map('map').setView([51.505, -0.09], 14);
+/* ===========================
+   BASIC MAP
+=========================== */
+const map = L.map('map').setView([51.505, -0.12], 14);
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png').addTo(map);
+L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+).addTo(map);
 
-let signals = [
-  {id:1,lat:51.5,lng:-0.12},
-  {id:2,lat:51.51,lng:-0.13},
-  {id:3,lat:51.49,lng:-0.11}
+/* ===========================
+   PLAYER STATE
+=========================== */
+let unlockedSignals = JSON.parse(localStorage.getItem("signals") || "[]");
+let visitedPubs = JSON.parse(localStorage.getItem("visited") || "[]");
+let xp = parseInt(localStorage.getItem("xp") || "0");
+
+/* ===========================
+   SIGNALS (DISTRICT UNLOCK)
+=========================== */
+const signals = [
+  { id: 1, lat: 51.505, lng: -0.12 },
+  { id: 2, lat: 51.51,  lng: -0.135 },
+  { id: 3, lat: 51.498, lng: -0.11 }
 ];
 
-let unlocked = JSON.parse(localStorage.getItem("signals")||"[]");
+signals.forEach(s => {
 
-signals.forEach(s=>{
-  let marker = L.marker([s.lat,s.lng],{
-    icon:L.divIcon({
-      html:`
-      <div class="signal-marker">
-        <div class="signal-core">📡</div>
-        <div class="signal-ring signal-ring-1"></div>
-        <div class="signal-ring signal-ring-2"></div>
-      </div>`
+  const marker = L.marker([s.lat, s.lng], {
+    icon: L.divIcon({
+      html: `
+        <div class="signal-marker">
+          <div class="signal-core">📡</div>
+          <div class="signal-ring signal-ring-1"></div>
+          <div class="signal-ring signal-ring-2"></div>
+        </div>
+      `,
+      className: ''
     })
   }).addTo(map);
 
-  marker.on("click",()=>{
-    if(!unlocked.includes(s.id)){
-      unlocked.push(s.id);
-      localStorage.setItem("signals",JSON.stringify(unlocked));
+  marker.on("click", () => {
+
+    if (!unlockedSignals.includes(s.id)) {
+
+      unlockedSignals.push(s.id);
+      localStorage.setItem("signals", JSON.stringify(unlockedSignals));
+
+      // 🔥 REWARD SYSTEM
+      xp += 50;
+      localStorage.setItem("xp", xp);
+
+      alert("Signal activated (+50 XP)");
+
+      renderPubs();
       updateUI();
     }
   });
+
 });
 
-function updateUI(){
-  let percent = (unlocked.length / signals.length)*100;
-  document.getElementById("progressFill").style.width = percent+"%";
-  document.getElementById("progressText").innerText =
-    unlocked.length+" / "+signals.length+" Signals Active";
+/* ===========================
+   PUB DATA (TEST SET)
+=========================== */
+const pubs = [
+  { id: 1, name: "The Admiralty", lat: 51.5075, lng: -0.128 },
+  { id: 2, name: "The Clarence", lat: 51.5033, lng: -0.127 },
+  { id: 3, name: "The Two Chairmen", lat: 51.4995, lng: -0.128 },
+  { id: 4, name: "The Red Lion", lat: 51.499, lng: -0.13 }
+];
+
+/* ===========================
+   RARE SYSTEM
+=========================== */
+function getRarity() {
+  const r = Math.random();
+  if (r < 0.05) return "legendary";
+  if (r < 0.2) return "rare";
+  return "common";
 }
 
-updateUI();
+/* ===========================
+   PUB RENDER
+=========================== */
+let pubMarkers = [];
 
-function centerOnUser(){
-  navigator.geolocation.getCurrentPosition(pos=>{
-    map.setView([pos.coords.latitude,pos.coords.longitude],16);
+function renderPubs() {
+
+  // clear old
+  pubMarkers.forEach(m => map.removeLayer(m));
+  pubMarkers = [];
+
+  // 🔥 REQUIRE SIGNAL TO SEE PUBS
+  if (unlockedSignals.length === 0) return;
+
+  pubs.forEach(pub => {
+
+    const rarity = getRarity();
+
+    const icon = L.divIcon({
+      html: `<div class="pint-marker">${rarity === "legendary" ? "🔥" : "🍺"}</div>`,
+      className: ''
+    });
+
+    const marker = L.marker([pub.lat, pub.lng], { icon }).addTo(map);
+
+    marker.on("click", () => {
+
+      if (!visitedPubs.includes(pub.id)) {
+        visitedPubs.push(pub.id);
+        localStorage.setItem("visited", JSON.stringify(visitedPubs));
+
+        let gain = 10;
+        if (rarity === "rare") gain = 25;
+        if (rarity === "legendary") gain = 50;
+
+        xp += gain;
+        localStorage.setItem("xp", xp);
+
+        alert(pub.name + " discovered! +" + gain + " XP");
+
+        updateUI();
+      }
+
+    });
+
+    pubMarkers.push(marker);
   });
 }
+
+/* ===========================
+   UI UPDATE
+=========================== */
+function updateUI() {
+
+  document.getElementById("signalText").innerText =
+    unlockedSignals.length + " / " + signals.length + " Signals";
+
+  document.getElementById("xp").innerText = xp;
+
+  const percent = (unlockedSignals.length / signals.length) * 100;
+  document.getElementById("progress").style.width = percent + "%";
+}
+
+/* ===========================
+   INIT
+=========================== */
+renderPubs();
+updateUI();
+
 </script>
 
 </body>
