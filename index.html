@@ -14,7 +14,6 @@
         <div class="brand-title">Pint Signal</div>
         <div class="brand-subtitle">District Signal Network</div>
       </div>
-
       <nav class="menu">
         <a href="index.html">Map</a>
         <a href="passport.html">Passport</a>
@@ -28,7 +27,7 @@
 
   <aside class="panel hud">
     <div class="title">Signal Network</div>
-    <div class="sub">Synchronise Signals to uncover Westminster and reveal pubs.</div>
+    <div class="sub">Synchronise Signals to uncover districts and reveal pubs.</div>
 
     <div class="mission-card">
       <div class="mission-label">Current objective</div>
@@ -69,6 +68,21 @@
       <button type="button" class="button-secondary" id="unlockAllSignalsButton">Unlock all</button>
     </div>
 
+    <div class="intel-card top-gap">
+      <div class="intel-line">
+        <span>Dataset pubs</span>
+        <strong id="datasetTotalValue">0</strong>
+      </div>
+      <div class="intel-line">
+        <span>Mappable pubs</span>
+        <strong id="datasetMappableValue">0</strong>
+      </div>
+      <div class="intel-line">
+        <span>Currently visible</span>
+        <strong id="datasetVisibleValue">0</strong>
+      </div>
+    </div>
+
     <div class="muted top-gap" id="mapStatus">Move within 50m of a Signal to uncover an area.</div>
   </aside>
 
@@ -76,7 +90,7 @@
     <div class="drawer-top">
       <div>
         <div class="title">Uncovered Westminster</div>
-        <div class="sub">Only synchronised territory reveals pubs and intel.</div>
+        <div class="sub">Only synchronised districts reveal pubs and intel.</div>
       </div>
       <button class="drawer-toggle" id="drawerToggle" type="button">Hide</button>
     </div>
@@ -134,8 +148,7 @@
     let signalMarkers = [];
     let districtLabels = [];
     let pubMarkers = [];
-    let revealRings = [];
-    let revealGlows = [];
+    let districtRevealLayers = [];
 
     const signalsValueEl = document.getElementById("signalsValue");
     const knownPubsValueEl = document.getElementById("knownPubsValue");
@@ -153,6 +166,9 @@
     const unlockNearestSignalButtonEl = document.getElementById("unlockNearestSignalButton");
     const unlockAllSignalsButtonEl = document.getElementById("unlockAllSignalsButton");
     const devActionsRowEl = document.getElementById("devActionsRow");
+    const datasetTotalValueEl = document.getElementById("datasetTotalValue");
+    const datasetMappableValueEl = document.getElementById("datasetMappableValue");
+    const datasetVisibleValueEl = document.getElementById("datasetVisibleValue");
 
     if (!DEV_MODE) {
       devActionsRowEl.style.display = "none";
@@ -169,7 +185,6 @@
     function getStoredCoords(pubId) {
       const raw = localStorage.getItem(`pubcoords_${pubId}`);
       if (!raw) return null;
-
       try {
         const parsed = JSON.parse(raw);
         if (
@@ -180,8 +195,7 @@
         ) {
           return parsed;
         }
-      } catch (error) {}
-
+      } catch {}
       return null;
     }
 
@@ -197,16 +211,10 @@
     function getResolvedPubs() {
       return westminsterPubs.map(pub => {
         if (hasCoordinates(pub)) return pub;
-
         const stored = getStoredCoords(pub.id);
         if (stored) {
-          return {
-            ...pub,
-            lat: stored.lat,
-            lng: stored.lng
-          };
+          return { ...pub, lat: stored.lat, lng: stored.lng };
         }
-
         return pub;
       });
     }
@@ -214,18 +222,11 @@
     function getPubRarity(pub) {
       if (!state.rareAssignments[pub.id]) {
         const hash = Array.from(pub.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
-
-        if (hash < 5) {
-          state.rareAssignments[pub.id] = "legendary";
-        } else if (hash < 20) {
-          state.rareAssignments[pub.id] = "rare";
-        } else if (hash < 45) {
-          state.rareAssignments[pub.id] = "notable";
-        } else {
-          state.rareAssignments[pub.id] = "common";
-        }
+        if (hash < 5) state.rareAssignments[pub.id] = "legendary";
+        else if (hash < 20) state.rareAssignments[pub.id] = "rare";
+        else if (hash < 45) state.rareAssignments[pub.id] = "notable";
+        else state.rareAssignments[pub.id] = "common";
       }
-
       return state.rareAssignments[pub.id];
     }
 
@@ -237,10 +238,10 @@
     }
 
     function getRarityEmoji(rarity) {
-      if (rarity === "legendary") return "🔥";
-      if (rarity === "rare") return "✨";
-      if (rarity === "notable") return "⭐";
-      return "🍺";
+      if (rarity === "legendary") return "✦";
+      if (rarity === "rare") return "◆";
+      if (rarity === "notable") return "◈";
+      return "•";
     }
 
     function rarityRank(rarity) {
@@ -261,40 +262,12 @@
       list.length = 0;
     }
 
-    function signalIcon(unlocked, districtId) {
-      const district = getDistrictById(districtId);
-
-      return L.divIcon({
-        html: `
-          <div class="signal-marker ${unlocked ? "signal-unlocked" : "signal-locked"}" style="--signal-color:${district ? district.color : "#d4a24c"};">
-            <div class="signal-core">📡</div>
-            <div class="signal-ring signal-ring-1"></div>
-            <div class="signal-ring signal-ring-2"></div>
-          </div>
-        `,
-        className: "signal-marker-wrap",
-        iconSize: [54, 54],
-        iconAnchor: [27, 27]
-      });
-    }
-
-    function pubIcon(pub, visited) {
-      const rarity = getPubRarity(pub);
-
-      return L.divIcon({
-        html: `
-          <div class="pint-marker-ac rarity-${rarity} ${visited ? "pub-visited" : ""}">
-            ${getRarityEmoji(rarity)}
-          </div>
-        `,
-        className: "pint-marker-wrap",
-        iconSize: [34, 34],
-        iconAnchor: [17, 24]
-      });
-    }
-
     function isDistrictUncovered(districtId) {
       return signals.some(signal => signal.districtId === districtId && state.unlockedSignals.has(signal.id));
+    }
+
+    function getDistrictSignalCenters(districtId) {
+      return signals.filter(signal => signal.districtId === districtId);
     }
 
     function isPubVisible(pub) {
@@ -328,7 +301,6 @@
 
     function getDistrictRewardState(districtId) {
       const percent = getDistrictCompletionPercent(districtId);
-
       return REWARD_STEPS.map(step => ({
         ...step,
         unlocked: percent >= step.threshold
@@ -415,14 +387,6 @@
         };
       }
 
-      if (nearestLockedSignal && userPos) {
-        const distance = Math.round(map.distance(userPos, [nearestLockedSignal.lat, nearestLockedSignal.lng]));
-        return {
-          title: `Expand to ${nearestLockedSignal.name}`,
-          sub: `${distance}m away · New territory available`
-        };
-      }
-
       if (nearestLockedSignal) {
         return {
           title: `Expand to ${nearestLockedSignal.name}`,
@@ -434,6 +398,34 @@
         title: "Hunt rare pubs",
         sub: "All uncovered districts are cleared — chase rare and legendary finds"
       };
+    }
+
+    function signalIcon(unlocked, districtId) {
+      const district = getDistrictById(districtId);
+      return L.divIcon({
+        html: `
+          <div class="signal-marker ${unlocked ? "signal-unlocked" : "signal-locked"}" style="--signal-color:${district ? district.color : "#d4a24c"};">
+            <div class="signal-core">${unlocked ? "⌾" : "○"}</div>
+          </div>
+        `,
+        className: "signal-marker-wrap",
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      });
+    }
+
+    function pubIcon(pub, visited) {
+      const rarity = getPubRarity(pub);
+      return L.divIcon({
+        html: `
+          <div class="pint-marker-ac rarity-${rarity} ${visited ? "pub-visited" : ""}">
+            ${getRarityEmoji(rarity)}
+          </div>
+        `,
+        className: "pint-marker-wrap",
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      });
     }
 
     function renderDistrictLabels() {
@@ -456,35 +448,30 @@
       });
     }
 
-    function renderRevealZones() {
-      clearLayers(revealRings);
-      clearLayers(revealGlows);
+    function renderDistrictRevealZones() {
+      clearLayers(districtRevealLayers);
 
-      signals.forEach(signal => {
-        if (!state.unlockedSignals.has(signal.id)) return;
+      districts.forEach(district => {
+        if (!isDistrictUncovered(district.id)) return;
 
-        const district = getDistrictById(signal.districtId);
-        const color = district ? district.color : "#ffd27a";
+        const districtSignals = getDistrictSignalCenters(district.id);
+        if (!districtSignals.length) return;
 
-        const glow = L.circle([signal.lat, signal.lng], {
-          radius: SIGNAL_RADIUS_METERS * 1.28,
-          stroke: false,
-          fillColor: color,
-          fillOpacity: 0.11,
-          interactive: false
-        }).addTo(map);
+        const color = district.color || "#d4a24c";
 
-        const reveal = L.circle([signal.lat, signal.lng], {
-          radius: SIGNAL_RADIUS_METERS,
-          color,
-          weight: 2,
-          fillColor: color,
-          fillOpacity: 0.18,
-          interactive: false
-        }).addTo(map);
+        districtSignals.forEach(signal => {
+          const zone = L.circle([signal.lat, signal.lng], {
+            radius: SIGNAL_RADIUS_METERS,
+            color,
+            weight: 1,
+            fillColor: color,
+            fillOpacity: 0.08,
+            opacity: 0.35,
+            interactive: false
+          }).addTo(map);
 
-        revealGlows.push(glow);
-        revealRings.push(reveal);
+          districtRevealLayers.push(zone);
+        });
       });
     }
 
@@ -562,9 +549,7 @@
         `);
 
         marker.on("click", () => {
-          if (!visited) {
-            discoverPub(pub);
-          }
+          if (!visited) discoverPub(pub);
           window.location.href = `pub.html?id=${encodeURIComponent(pub.id)}`;
         });
 
@@ -574,6 +559,8 @@
 
     function renderHud() {
       const visiblePubs = getVisiblePubs();
+      const resolvedPubs = getResolvedPubs();
+      const mappablePubs = resolvedPubs.filter(pub => hasCoordinates(pub));
       const progress = signals.length ? (state.unlockedSignals.size / signals.length) * 100 : 0;
       const mission = getMission();
 
@@ -584,6 +571,10 @@
       networkProgressFillEl.style.width = `${progress}%`;
       missionTitleEl.textContent = mission.title;
       missionSubEl.textContent = mission.sub;
+
+      datasetTotalValueEl.textContent = String(resolvedPubs.length);
+      datasetMappableValueEl.textContent = String(mappablePubs.length);
+      datasetVisibleValueEl.textContent = String(visiblePubs.length);
     }
 
     function renderDrawer() {
@@ -598,6 +589,7 @@
       drawerBodyEl.innerHTML = districts.map(district => {
         const uncovered = isDistrictUncovered(district.id);
         const total = getDistrictPubs(district.id).length;
+        const mappable = getDistrictPubs(district.id).filter(pub => hasCoordinates(pub)).length;
         const visible = getDistrictVisiblePubs(district.id).length;
         const visited = getDistrictVisitedPubs(district.id).length;
         const percent = getDistrictCompletionPercent(district.id);
@@ -617,7 +609,9 @@
             </div>
 
             <div class="district-summary">
-              ${uncovered ? `Known ${visible}/${total} · Visited ${visited}/${total}` : `Unknown · Visited ${visited}/${total}`}
+              ${uncovered
+                ? `Visible ${visible}/${mappable} mappable · Visited ${visited}/${total}`
+                : `Unknown · Visited ${visited}/${total}`}
             </div>
 
             <div class="progress district-progress">
@@ -750,11 +744,6 @@
     unlockNearestSignalButtonEl.addEventListener("click", unlockNearestSignal);
     unlockAllSignalsButtonEl.addEventListener("click", unlockAllSignals);
 
-    window.centerOnUser = centerOnUser;
-    window.resetProgress = resetProgress;
-    window.unlockNearestSignal = unlockNearestSignal;
-    window.unlockAllSignals = unlockAllSignals;
-
     navigator.geolocation.watchPosition(
       pos => {
         userPos = [pos.coords.latitude, pos.coords.longitude];
@@ -781,7 +770,7 @@
 
     function renderAll() {
       renderDistrictLabels();
-      renderRevealZones();
+      renderDistrictRevealZones();
       renderSignals();
       renderPubs();
       renderHud();
