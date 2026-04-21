@@ -3,59 +3,528 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pub</title>
-
+  <title>Pint Signal Pub</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
-<header class="topbar">
-  <div class="topbar-inner">
-    <div>
-      <div class="brand-title">Pint Signal 🍺</div>
-      <div class="brand-subtitle">Pub</div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="brand-title">Pint Signal</div>
+        <div class="brand-subtitle">Pub record</div>
+      </div>
+
+      <nav class="menu">
+        <a href="index.html">Map</a>
+        <a href="passport.html">Passport</a>
+        <a href="leaderboard.html">Leaderboard</a>
+      </nav>
     </div>
+  </header>
 
-    <nav class="menu">
-      <a href="index.html">Map</a>
-      <a href="passport.html">Passport</a>
-      <a href="leaderboard.html">Leaderboard</a>
-    </nav>
-  </div>
-</header>
+  <main class="page passport-page">
+    <section class="card" id="pubHeroCard">
+      <div class="section-kicker">Pub Record</div>
+      <div id="pubHeroContent">
+        <div class="panel-title">Loading pub…</div>
+      </div>
+    </section>
 
-<main class="page page-narrow">
-  <a href="index.html" class="back-link">← Back to map</a>
+    <section class="card">
+      <div class="panel-title">Actions</div>
+      <div class="panel-sub">Testing mode is enabled here so you can mark visits without location.</div>
 
-  <div id="pub"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" id="actionButtons">
+        <button id="checkInButton" type="button">Check In</button>
+        <button id="removeCheckInButton" class="button-secondary" type="button">Remove Check-In</button>
+        <button id="directionsButton" class="button-secondary" type="button">Open Directions</button>
+      </div>
 
-  <button id="checkin">Check In</button>
-</main>
+      <div id="actionStatus" class="panel-sub top-gap">Ready.</div>
+    </section>
 
-<script type="module">
-import { westminsterPubs } from "./westminster-pubs.js";
+    <section class="card">
+      <div class="panel-title">District Progress</div>
+      <div class="panel-sub">See how this pub contributes to clearing its district.</div>
+      <div id="districtProgressCard"></div>
+    </section>
 
-const params = new URLSearchParams(location.search);
-const id = params.get("id");
+    <section class="card">
+      <div class="panel-title">Pint Log</div>
+      <div class="panel-sub">Add prices for this pub and build its history.</div>
 
-const pub = westminsterPubs.find(p => p.id === id);
+      <div style="display:grid;grid-template-columns:1fr 140px;gap:12px;">
+        <input id="priceInput" class="passport-select" type="number" min="0" step="0.01" placeholder="e.g. 6.40" />
+        <button id="addPriceButton" type="button">Add Price</button>
+      </div>
 
-if (!pub) {
-  document.getElementById("pub").innerText = "Pub not found";
-} else {
-  document.getElementById("pub").innerHTML = `
-    <h2>${pub.name}</h2>
-    <p>${pub.address || ""}</p>
-  `;
-}
+      <div style="margin-top:12px;">
+        <input id="priceDrinkInput" class="passport-select" type="text" placeholder="Optional drink name e.g. Guinness" />
+      </div>
 
-document.getElementById("checkin").onclick = () => {
-  let visited = new Set(JSON.parse(localStorage.getItem("visitedPubs") || "[]"));
-  visited.add(id);
-  localStorage.setItem("visitedPubs", JSON.stringify([...visited]));
-  alert("Checked in ✔");
-};
-</script>
+      <div style="margin-top:12px;">
+        <input id="priceNoteInput" class="passport-select" type="text" placeholder="Optional note" />
+      </div>
 
+      <div id="priceStatus" class="panel-sub top-gap">No price added yet.</div>
+
+      <div style="margin-top:16px;">
+        <div class="subsection-title">Latest Pint</div>
+        <div id="latestPriceCard"></div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="subsection-title">Price History</div>
+        <div id="priceHistoryList" class="stack-book-list"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="panel-title">Nearby Pubs</div>
+      <div class="panel-sub">Good next targets around this pub.</div>
+      <div id="nearbyPubsList" class="stack-book-list"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { westminsterPubs } from "./westminster-pubs.js";
+    import { districts, getDistrictForPub } from "./districts.js";
+
+    const STORAGE_KEYS = {
+      visited: "pint_signal_visited_pubs",
+      xp: "pint_signal_xp",
+      rare: "pint_signal_rare_assignments",
+      prices: "pint_signal_price_log"
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const pubId = params.get("id");
+
+    const visitedPubs = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.visited) || "[]"));
+    let xp = Number(localStorage.getItem(STORAGE_KEYS.xp) || "0");
+    let rareAssignments = JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}");
+    let allPrices = JSON.parse(localStorage.getItem(STORAGE_KEYS.prices) || "{}");
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEYS.visited, JSON.stringify([...visitedPubs]));
+      localStorage.setItem(STORAGE_KEYS.xp, String(xp));
+      localStorage.setItem(STORAGE_KEYS.rare, JSON.stringify(rareAssignments));
+      localStorage.setItem(STORAGE_KEYS.prices, JSON.stringify(allPrices));
+    }
+
+    function getStoredCoords(pubId) {
+      const raw = localStorage.getItem(`pubcoords_${pubId}`);
+      if (!raw) return null;
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          !Number.isNaN(parsed.lat) &&
+          !Number.isNaN(parsed.lng)
+        ) {
+          return parsed;
+        }
+      } catch (error) {}
+
+      return null;
+    }
+
+    function hasCoordinates(pub) {
+      return (
+        typeof pub.lat === "number" &&
+        typeof pub.lng === "number" &&
+        !Number.isNaN(pub.lat) &&
+        !Number.isNaN(pub.lng)
+      );
+    }
+
+    function getResolvedPubs() {
+      return westminsterPubs.map(pub => {
+        if (hasCoordinates(pub)) return pub;
+
+        const stored = getStoredCoords(pub.id);
+        if (stored) {
+          return {
+            ...pub,
+            lat: stored.lat,
+            lng: stored.lng
+          };
+        }
+
+        return pub;
+      });
+    }
+
+    function getPubRarity(pub) {
+      if (!rareAssignments[pub.id]) {
+        const hash = Array.from(pub.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
+
+        if (hash < 5) {
+          rareAssignments[pub.id] = "legendary";
+        } else if (hash < 20) {
+          rareAssignments[pub.id] = "rare";
+        } else if (hash < 45) {
+          rareAssignments[pub.id] = "notable";
+        } else {
+          rareAssignments[pub.id] = "common";
+        }
+      }
+
+      return rareAssignments[pub.id];
+    }
+
+    function getRarityXp(rarity) {
+      if (rarity === "legendary") return 60;
+      if (rarity === "rare") return 30;
+      if (rarity === "notable") return 18;
+      return 10;
+    }
+
+    function formatMoney(value) {
+      return `£${Number(value).toFixed(2)}`;
+    }
+
+    function formatDate(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function distanceInMeters(lat1, lng1, lat2, lng2) {
+      const toRad = value => (value * Math.PI) / 180;
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    const pubs = getResolvedPubs();
+    const pub = pubs.find(item => item.id === pubId);
+
+    const pubHeroContentEl = document.getElementById("pubHeroContent");
+    const districtProgressCardEl = document.getElementById("districtProgressCard");
+    const nearbyPubsListEl = document.getElementById("nearbyPubsList");
+    const latestPriceCardEl = document.getElementById("latestPriceCard");
+    const priceHistoryListEl = document.getElementById("priceHistoryList");
+
+    const actionStatusEl = document.getElementById("actionStatus");
+    const priceStatusEl = document.getElementById("priceStatus");
+
+    const checkInButtonEl = document.getElementById("checkInButton");
+    const removeCheckInButtonEl = document.getElementById("removeCheckInButton");
+    const directionsButtonEl = document.getElementById("directionsButton");
+
+    const addPriceButtonEl = document.getElementById("addPriceButton");
+    const priceInputEl = document.getElementById("priceInput");
+    const priceDrinkInputEl = document.getElementById("priceDrinkInput");
+    const priceNoteInputEl = document.getElementById("priceNoteInput");
+
+    if (!pub) {
+      pubHeroContentEl.innerHTML = `
+        <div class="panel-title">Pub not found</div>
+        <div class="panel-sub">This pub does not exist in the current dataset.</div>
+      `;
+      document.getElementById("actionButtons").style.display = "none";
+      districtProgressCardEl.innerHTML = `<div class="empty-state">No district data available.</div>`;
+      latestPriceCardEl.innerHTML = `<div class="empty-state">No price data available.</div>`;
+      priceHistoryListEl.innerHTML = `<div class="empty-state">No history available.</div>`;
+      nearbyPubsListEl.innerHTML = `<div class="empty-state">No nearby pubs available.</div>`;
+      throw new Error("Pub not found");
+    }
+
+    function getDistrictData() {
+      const districtId = getDistrictForPub(pub);
+      const district = districts.find(d => d.id === districtId) || null;
+      const districtPubs = pubs.filter(item => getDistrictForPub(item) === districtId);
+      const visitedDistrictPubs = districtPubs.filter(item => visitedPubs.has(item.id));
+      const percent = districtPubs.length ? (visitedDistrictPubs.length / districtPubs.length) * 100 : 0;
+
+      return {
+        districtId,
+        district,
+        districtPubs,
+        visitedDistrictPubs,
+        percent
+      };
+    }
+
+    function getPubPriceHistory() {
+      const list = Array.isArray(allPrices[pub.id]) ? allPrices[pub.id] : [];
+      return [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    function renderHero() {
+      const rarity = getPubRarity(pub);
+      const rarityXp = getRarityXp(rarity);
+      const visited = visitedPubs.has(pub.id);
+      const districtData = getDistrictData();
+
+      pubHeroContentEl.innerHTML = `
+        <div class="passport-hero-top">
+          <div>
+            <h1 class="passport-title" style="margin-bottom:8px;">${pub.name}</h1>
+            <p class="passport-subtitle" style="margin-top:0;">${pub.address || "Address unavailable"}${pub.postcode ? ` · ${pub.postcode}` : ""}</p>
+          </div>
+          <div class="passport-rank-chip">${visited ? "Visited" : "Undiscovered"}</div>
+        </div>
+
+        <div class="passport-hero-grid" style="margin-top:18px;">
+          <div class="passport-hero-stat">
+            <span>District</span>
+            <strong style="font-size:20px;">${districtData.district ? districtData.district.name : "Unknown"}</strong>
+          </div>
+          <div class="passport-hero-stat">
+            <span>Rarity</span>
+            <strong style="font-size:20px;text-transform:capitalize;">${rarity}</strong>
+          </div>
+          <div class="passport-hero-stat">
+            <span>XP value</span>
+            <strong style="font-size:20px;">${rarityXp}</strong>
+          </div>
+          <div class="passport-hero-stat">
+            <span>District progress</span>
+            <strong style="font-size:20px;">${districtData.percent.toFixed(0)}%</strong>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDistrictContribution() {
+      const districtData = getDistrictData();
+      const rewards = [
+        { threshold: 25, label: "Scout" },
+        { threshold: 50, label: "Regular" },
+        { threshold: 100, label: "Cleared" }
+      ];
+
+      districtProgressCardEl.innerHTML = `
+        <div class="passport-district-card">
+          <div class="district-row-top">
+            <div class="district-name-wrap">
+              <span class="district-dot" style="background:${districtData.district?.color || "#d4a24c"};"></span>
+              <strong>${districtData.district ? districtData.district.name : "Unknown district"}</strong>
+            </div>
+            <span class="district-status ${visitedPubs.has(pub.id) ? "district-online" : "district-offline"}">
+              ${visitedPubs.has(pub.id) ? "This pub counted" : "Not counted yet"}
+            </span>
+          </div>
+
+          <div class="district-meta">
+            ${districtData.visitedDistrictPubs.length}/${districtData.districtPubs.length} pubs discovered in this district
+          </div>
+
+          <div class="district-progress-bar">
+            <div class="district-progress-fill" style="width:${districtData.percent}%; background:${districtData.district?.color || "#d4a24c"};"></div>
+          </div>
+
+          <div class="reward-row">
+            ${rewards.map(step => `
+              <span class="reward-pill ${districtData.percent >= step.threshold ? "reward-unlocked" : "reward-locked"}">
+                ${step.threshold}% ${step.label}
+              </span>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderNearbyPubs() {
+      if (!hasCoordinates(pub)) {
+        nearbyPubsListEl.innerHTML = `<div class="empty-state">No coordinates available for nearby pub suggestions.</div>`;
+        directionsButtonEl.disabled = true;
+        return;
+      }
+
+      const nearby = pubs
+        .filter(item => item.id !== pub.id && hasCoordinates(item))
+        .map(item => ({
+          ...item,
+          distance: distanceInMeters(pub.lat, pub.lng, item.lat, item.lng)
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 6);
+
+      if (!nearby.length) {
+        nearbyPubsListEl.innerHTML = `<div class="empty-state">No nearby pubs found.</div>`;
+        return;
+      }
+
+      nearbyPubsListEl.innerHTML = nearby.map(item => {
+        const district = districts.find(d => d.id === getDistrictForPub(item));
+        const rarity = getPubRarity(item);
+
+        return `
+          <button class="stack-card pub-list-card" onclick="window.location.href='pub.html?id=${encodeURIComponent(item.id)}'">
+            <div class="stack-title">${item.name}</div>
+            <div class="stack-meta">${district ? district.name : "District unknown"} · ${Math.round(item.distance)}m · ${rarity}</div>
+          </button>
+        `;
+      }).join("");
+    }
+
+    function renderPriceSection() {
+      const history = getPubPriceHistory();
+
+      if (!history.length) {
+        latestPriceCardEl.innerHTML = `<div class="empty-state">No pint logged yet for this pub.</div>`;
+        priceHistoryListEl.innerHTML = `<div class="empty-state">No price history yet.</div>`;
+        return;
+      }
+
+      const latest = history[0];
+
+      latestPriceCardEl.innerHTML = `
+        <div class="passport-district-card">
+          <div class="district-row-top">
+            <div class="district-name-wrap">
+              <strong>${formatMoney(latest.price)}</strong>
+            </div>
+            <span class="district-status">${formatDate(latest.createdAt)}</span>
+          </div>
+          <div class="district-meta">
+            ${latest.drink ? latest.drink : "Pint"}${latest.note ? ` · ${latest.note}` : ""}
+          </div>
+        </div>
+      `;
+
+      priceHistoryListEl.innerHTML = history.map((entry, index) => `
+        <div class="stack-card passive-card">
+          <div class="stack-title">${formatMoney(entry.price)}${entry.drink ? ` · ${entry.drink}` : ""}</div>
+          <div class="stack-meta">${formatDate(entry.createdAt)}</div>
+          ${entry.note ? `<div class="stack-meta">${entry.note}</div>` : ""}
+          <div style="margin-top:10px;">
+            <button type="button" onclick="window.removePriceEntry(${index})">Remove entry</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function renderAll() {
+      renderHero();
+      renderDistrictContribution();
+      renderNearbyPubs();
+      renderPriceSection();
+
+      const visited = visitedPubs.has(pub.id);
+      checkInButtonEl.disabled = visited;
+      removeCheckInButtonEl.disabled = !visited;
+    }
+
+    function checkInPub() {
+      if (visitedPubs.has(pub.id)) {
+        actionStatusEl.textContent = `${pub.name} is already checked in.`;
+        return;
+      }
+
+      const rarity = getPubRarity(pub);
+      const gain = getRarityXp(rarity);
+
+      visitedPubs.add(pub.id);
+      xp += gain;
+      saveState();
+      renderAll();
+
+      actionStatusEl.textContent = `${pub.name} checked in. +${gain} XP (${rarity}).`;
+    }
+
+    function removeCheckIn() {
+      if (!visitedPubs.has(pub.id)) {
+        actionStatusEl.textContent = `${pub.name} is not currently checked in.`;
+        return;
+      }
+
+      const rarity = getPubRarity(pub);
+      const deduction = getRarityXp(rarity);
+
+      visitedPubs.delete(pub.id);
+      xp = Math.max(0, xp - deduction);
+      saveState();
+      renderAll();
+
+      actionStatusEl.textContent = `${pub.name} check-in removed. -${deduction} XP.`;
+    }
+
+    function openDirections() {
+      if (!hasCoordinates(pub)) {
+        actionStatusEl.textContent = "No coordinates available for directions.";
+        return;
+      }
+
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pub.lat},${pub.lng}`)}`;
+      window.open(url, "_blank");
+    }
+
+    function addPriceEntry() {
+      const rawPrice = priceInputEl.value.trim();
+      const drink = priceDrinkInputEl.value.trim();
+      const note = priceNoteInputEl.value.trim();
+
+      if (!rawPrice) {
+        priceStatusEl.textContent = "Enter a pint price first.";
+        return;
+      }
+
+      const price = Number(rawPrice);
+      if (Number.isNaN(price) || price <= 0) {
+        priceStatusEl.textContent = "Enter a valid price.";
+        return;
+      }
+
+      if (!Array.isArray(allPrices[pub.id])) {
+        allPrices[pub.id] = [];
+      }
+
+      allPrices[pub.id].push({
+        price,
+        drink,
+        note,
+        createdAt: new Date().toISOString()
+      });
+
+      saveState();
+      renderPriceSection();
+
+      priceInputEl.value = "";
+      priceDrinkInputEl.value = "";
+      priceNoteInputEl.value = "";
+
+      priceStatusEl.textContent = `Added ${formatMoney(price)} for ${pub.name}.`;
+    }
+
+    window.removePriceEntry = function removePriceEntry(index) {
+      const history = getPubPriceHistory();
+      const target = history[index];
+      if (!target) return;
+
+      allPrices[pub.id] = (allPrices[pub.id] || []).filter(entry => entry.createdAt !== target.createdAt);
+      saveState();
+      renderPriceSection();
+
+      priceStatusEl.textContent = "Price entry removed.";
+    };
+
+    checkInButtonEl.addEventListener("click", checkInPub);
+    removeCheckInButtonEl.addEventListener("click", removeCheckIn);
+    directionsButtonEl.addEventListener("click", openDirections);
+    addPriceButtonEl.addEventListener("click", addPriceEntry);
+
+    renderAll();
+  </script>
 </body>
 </html>
