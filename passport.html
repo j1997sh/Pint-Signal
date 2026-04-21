@@ -26,11 +26,11 @@
     <section class="passport-hero card">
       <div class="passport-hero-top">
         <div>
-          <div class="hud-kicker">Explorer Profile</div>
-          <div class="passport-title">Westminster Survey Passport</div>
-          <div class="passport-subtitle">Track districts, rare pubs, and your discovery rank.</div>
+          <div class="section-kicker">Explorer Profile</div>
+          <h1 class="passport-title">Westminster Passport</h1>
+          <p class="passport-subtitle">Track districts, collect rare pubs, and test progress quickly.</p>
         </div>
-        <div class="passport-rank-chip" id="rankChip">Scout</div>
+        <div class="passport-rank-chip" id="rankChip">Newcomer</div>
       </div>
 
       <div class="passport-hero-grid">
@@ -60,37 +60,72 @@
     <section class="card">
       <div class="section-title-row">
         <div>
-          <div class="panel-title">District Collection</div>
-          <div class="panel-sub">Clear districts, unlock rewards, and chase missing targets.</div>
+          <div class="panel-title">Test Check-In</div>
+          <div class="panel-sub">Temporary testing tool. Mark any pub as visited without location.</div>
         </div>
       </div>
+
+      <div class="passport-controls">
+        <select id="testCheckinSelect" class="passport-select">
+          <option value="">Choose a pub to check in...</option>
+        </select>
+        <button id="testCheckinButton">Check In Anywhere</button>
+      </div>
+
+      <div class="test-actions-row">
+        <button class="button-secondary" id="removeCheckinButton">Remove Check-In</button>
+        <button class="button-secondary" id="clearAllCheckinsButton">Clear All Check-Ins</button>
+      </div>
+
+      <div id="testCheckinStatus" class="panel-sub top-gap">Testing mode active.</div>
+    </section>
+
+    <section class="card">
+      <div class="section-title-row">
+        <div>
+          <div class="panel-title">District Collection</div>
+          <div class="panel-sub">Clear districts, unlock rewards, and see what remains.</div>
+        </div>
+      </div>
+
       <div id="districtProgressList" class="passport-district-list"></div>
     </section>
 
     <section class="card">
       <div class="section-title-row">
         <div>
-          <div class="panel-title">Rarity Collection</div>
-          <div class="panel-sub">Your discovered pub tiers across the city.</div>
+          <div class="panel-title">Rare Pub Collection</div>
+          <div class="panel-sub">Your high-value discoveries across Westminster.</div>
         </div>
       </div>
 
       <div class="rarity-grid">
-        <div class="rarity-card rarity-common">
+        <div class="rarity-card rarity-common-card">
           <span>Common</span>
           <strong id="commonCount">0</strong>
         </div>
-        <div class="rarity-card rarity-notable">
+        <div class="rarity-card rarity-notable-card">
           <span>Notable</span>
           <strong id="notableCount">0</strong>
         </div>
-        <div class="rarity-card rarity-rare">
+        <div class="rarity-card rarity-rare-card">
           <span>Rare</span>
           <strong id="rareCount">0</strong>
         </div>
-        <div class="rarity-card rarity-legendary">
+        <div class="rarity-card rarity-legendary-card">
           <span>Legendary</span>
           <strong id="legendaryCount">0</strong>
+        </div>
+      </div>
+
+      <div class="rare-collection-layout">
+        <div>
+          <div class="subsection-title">Legendary & Rare</div>
+          <div id="rarePubCollection" class="stack-book-list"></div>
+        </div>
+        <div>
+          <div class="subsection-title">Missing high-tier pubs</div>
+          <div id="missingRareCollection" class="stack-book-list"></div>
         </div>
       </div>
     </section>
@@ -99,7 +134,7 @@
       <div class="section-title-row">
         <div>
           <div class="panel-title">Stamp Book</div>
-          <div class="panel-sub">Browse your collection or jump to any pub.</div>
+          <div class="panel-sub">Browse the full collection and jump to any pub.</div>
         </div>
       </div>
 
@@ -134,8 +169,14 @@
 
     const unlockedSignals = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.signals) || "[]"));
     const visitedPubs = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.visited) || "[]"));
-    const xp = Number(localStorage.getItem(STORAGE_KEYS.xp) || "0");
-    const rareAssignments = JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}");
+    let xp = Number(localStorage.getItem(STORAGE_KEYS.xp) || "0");
+    let rareAssignments = JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}");
+
+    function saveVisitedState() {
+      localStorage.setItem(STORAGE_KEYS.visited, JSON.stringify([...visitedPubs]));
+      localStorage.setItem(STORAGE_KEYS.xp, String(xp));
+      localStorage.setItem(STORAGE_KEYS.rare, JSON.stringify(rareAssignments));
+    }
 
     function getStoredCoords(pubId) {
       const raw = localStorage.getItem(`pubcoords_${pubId}`);
@@ -183,7 +224,28 @@
     }
 
     function getPubRarity(pub) {
-      return rareAssignments[pub.id] || "common";
+      if (!rareAssignments[pub.id]) {
+        const hash = Array.from(pub.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
+
+        if (hash < 5) {
+          rareAssignments[pub.id] = "legendary";
+        } else if (hash < 20) {
+          rareAssignments[pub.id] = "rare";
+        } else if (hash < 45) {
+          rareAssignments[pub.id] = "notable";
+        } else {
+          rareAssignments[pub.id] = "common";
+        }
+      }
+
+      return rareAssignments[pub.id];
+    }
+
+    function getRarityXp(rarity) {
+      if (rarity === "legendary") return 60;
+      if (rarity === "rare") return 30;
+      if (rarity === "notable") return 18;
+      return 10;
     }
 
     function getRankFromXp(value) {
@@ -194,8 +256,11 @@
       return "Newcomer";
     }
 
+    function getDistrictPubs(pubs, districtId) {
+      return pubs.filter(pub => getDistrictForPub(pub) === districtId);
+    }
+
     const pubs = getResolvedPubs();
-    const visitedPubRecords = pubs.filter(pub => visitedPubs.has(pub.id));
 
     const passportPercentEl = document.getElementById("passportPercent");
     const passportBarEl = document.getElementById("passportBar");
@@ -211,8 +276,21 @@
     const notableCountEl = document.getElementById("notableCount");
     const rareCountEl = document.getElementById("rareCount");
     const legendaryCountEl = document.getElementById("legendaryCount");
+    const rarePubCollectionEl = document.getElementById("rarePubCollection");
+    const missingRareCollectionEl = document.getElementById("missingRareCollection");
+
+    const testCheckinSelectEl = document.getElementById("testCheckinSelect");
+    const testCheckinButtonEl = document.getElementById("testCheckinButton");
+    const removeCheckinButtonEl = document.getElementById("removeCheckinButton");
+    const clearAllCheckinsButtonEl = document.getElementById("clearAllCheckinsButton");
+    const testCheckinStatusEl = document.getElementById("testCheckinStatus");
+
+    function getVisitedPubRecords() {
+      return pubs.filter(pub => visitedPubs.has(pub.id));
+    }
 
     function renderOverview() {
+      const visitedPubRecords = getVisitedPubRecords();
       const percent = pubs.length ? (visitedPubRecords.length / pubs.length) * 100 : 0;
 
       passportPercentEl.textContent = `${percent.toFixed(1)}%`;
@@ -226,10 +304,11 @@
     function renderDistrictProgress() {
       districtProgressListEl.innerHTML = districts.map(district => {
         const districtSignals = signals.filter(signal => signal.districtId === district.id);
-        const districtPubs = pubs.filter(pub => getDistrictForPub(pub) === district.id);
+        const districtPubs = getDistrictPubs(pubs, district.id);
         const districtVisited = districtPubs.filter(pub => visitedPubs.has(pub.id));
         const unlockedCount = districtSignals.filter(signal => unlockedSignals.has(signal.id)).length;
         const percent = districtPubs.length ? (districtVisited.length / districtPubs.length) * 100 : 0;
+
         const bestMissing = districtPubs
           .filter(pub => !visitedPubs.has(pub.id))
           .sort((a, b) => {
@@ -275,6 +354,8 @@
     }
 
     function renderRarityCollection() {
+      const visitedPubRecords = getVisitedPubRecords();
+
       const counts = {
         common: 0,
         notable: 0,
@@ -290,21 +371,58 @@
       notableCountEl.textContent = String(counts.notable);
       rareCountEl.textContent = String(counts.rare);
       legendaryCountEl.textContent = String(counts.legendary);
+
+      const collectedHighTier = visitedPubRecords
+        .filter(pub => ["rare", "legendary"].includes(getPubRarity(pub)))
+        .sort((a, b) => {
+          const order = { legendary: 2, rare: 1 };
+          return order[getPubRarity(b)] - order[getPubRarity(a)] || a.name.localeCompare(b.name);
+        });
+
+      const missingHighTier = pubs
+        .filter(pub => !visitedPubs.has(pub.id) && ["rare", "legendary"].includes(getPubRarity(pub)))
+        .sort((a, b) => {
+          const order = { legendary: 2, rare: 1 };
+          return order[getPubRarity(b)] - order[getPubRarity(a)] || a.name.localeCompare(b.name);
+        });
+
+      rarePubCollectionEl.innerHTML = collectedHighTier.length
+        ? collectedHighTier.map(pub => `
+            <button class="stack-card pub-list-card" onclick="window.location.href='pub.html?id=${encodeURIComponent(pub.id)}'">
+              <div class="stack-title">${pub.name}</div>
+              <div class="stack-meta">${getPubRarity(pub)} · ${districts.find(d => d.id === getDistrictForPub(pub))?.name || "District unknown"}</div>
+            </button>
+          `).join("")
+        : `<div class="empty-state">No rare or legendary pubs discovered yet.</div>`;
+
+      missingRareCollectionEl.innerHTML = missingHighTier.length
+        ? missingHighTier.slice(0, 12).map(pub => `
+            <div class="stack-card passive-card">
+              <div class="stack-title">${pub.name}</div>
+              <div class="stack-meta">${getPubRarity(pub)} · ${districts.find(d => d.id === getDistrictForPub(pub))?.name || "District unknown"}</div>
+            </div>
+          `).join("")
+        : `<div class="empty-state">All currently assigned rare pubs have been found.</div>`;
     }
 
-    function renderPubSelect() {
+    function renderPubSelects() {
       const sorted = [...pubs].sort((a, b) => a.name.localeCompare(b.name));
 
-      pubSelectEl.innerHTML = `
+      const options = `
         <option value="">Choose a pub...</option>
         ${sorted.map(pub => {
           const district = districts.find(d => d.id === getDistrictForPub(pub));
           return `<option value="${pub.id}">${pub.name}${district ? ` — ${district.name}` : ""}</option>`;
         }).join("")}
       `;
+
+      pubSelectEl.innerHTML = options;
+      testCheckinSelectEl.innerHTML = options.replace("Choose a pub...", "Choose a pub to check in...");
     }
 
     function renderVisitedPubs() {
+      const visitedPubRecords = getVisitedPubRecords();
+
       if (visitedPubRecords.length === 0) {
         visitedPubListEl.innerHTML = `<div class="empty-state">No pubs discovered yet.</div>`;
         return;
@@ -331,19 +449,92 @@
       }).join("");
     }
 
+    function rerenderPassport() {
+      renderOverview();
+      renderDistrictProgress();
+      renderRarityCollection();
+      renderPubSelects();
+      renderVisitedPubs();
+    }
+
+    function checkInAnywhere() {
+      const pubId = testCheckinSelectEl.value;
+      if (!pubId) {
+        testCheckinStatusEl.textContent = "Choose a pub first.";
+        return;
+      }
+
+      const pub = pubs.find(item => item.id === pubId);
+      if (!pub) {
+        testCheckinStatusEl.textContent = "Pub not found.";
+        return;
+      }
+
+      if (visitedPubs.has(pubId)) {
+        testCheckinStatusEl.textContent = `${pub.name} is already checked in.`;
+        return;
+      }
+
+      const rarity = getPubRarity(pub);
+      const gain = getRarityXp(rarity);
+
+      visitedPubs.add(pubId);
+      xp += gain;
+      saveVisitedState();
+      rerenderPassport();
+
+      testCheckinStatusEl.textContent = `${pub.name} checked in for testing. +${gain} XP (${rarity}).`;
+    }
+
+    function removeCheckIn() {
+      const pubId = testCheckinSelectEl.value;
+      if (!pubId) {
+        testCheckinStatusEl.textContent = "Choose a pub first.";
+        return;
+      }
+
+      const pub = pubs.find(item => item.id === pubId);
+      if (!pub) {
+        testCheckinStatusEl.textContent = "Pub not found.";
+        return;
+      }
+
+      if (!visitedPubs.has(pubId)) {
+        testCheckinStatusEl.textContent = `${pub.name} is not currently checked in.`;
+        return;
+      }
+
+      const rarity = getPubRarity(pub);
+      const deduction = getRarityXp(rarity);
+
+      visitedPubs.delete(pubId);
+      xp = Math.max(0, xp - deduction);
+      saveVisitedState();
+      rerenderPassport();
+
+      testCheckinStatusEl.textContent = `${pub.name} check-in removed. -${deduction} XP.`;
+    }
+
+    function clearAllCheckIns() {
+      visitedPubs.clear();
+      xp = 0;
+      saveVisitedState();
+      rerenderPassport();
+      testCheckinStatusEl.textContent = "All test check-ins cleared.";
+    }
+
     function openSelectedPub() {
       const pubId = pubSelectEl.value;
       if (!pubId) return;
       window.location.href = `pub.html?id=${encodeURIComponent(pubId)}`;
     }
 
+    testCheckinButtonEl.addEventListener("click", checkInAnywhere);
+    removeCheckinButtonEl.addEventListener("click", removeCheckIn);
+    clearAllCheckinsButtonEl.addEventListener("click", clearAllCheckIns);
     openPubButtonEl.addEventListener("click", openSelectedPub);
 
-    renderOverview();
-    renderDistrictProgress();
-    renderRarityCollection();
-    renderPubSelect();
-    renderVisitedPubs();
+    rerenderPassport();
   </script>
 </body>
 </html>
