@@ -237,7 +237,6 @@
     function getLatestPriceEntry(pubId) {
       const history = Array.isArray(state.prices[pubId]) ? state.prices[pubId] : [];
       if (!history.length) return null;
-
       return [...history].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
     }
 
@@ -276,6 +275,10 @@
         iconSize: [34, 34],
         iconAnchor: [17, 24]
       });
+    }
+
+    function isDistrictUncovered(districtId) {
+      return signals.some(signal => signal.districtId === districtId && state.unlockedSignals.has(signal.id));
     }
 
     function isPubVisible(pub) {
@@ -328,6 +331,7 @@
       }
 
       const bestRare = [...visiblePubs].sort((a, b) => rarityRank(getPubRarity(b)) - rarityRank(getPubRarity(a)))[0] || null;
+
       const nextTarget = visiblePubs
         .filter(pub => !state.visitedPubs.has(pub.id))
         .sort((a, b) => rarityRank(getPubRarity(b)) - rarityRank(getPubRarity(a)))[0] || null;
@@ -380,9 +384,9 @@
           district,
           percent: getDistrictCompletionPercent(district.id),
           intel: getDistrictIntel(district.id),
-          online: signals.some(signal => signal.districtId === district.id && state.unlockedSignals.has(signal.id))
+          uncovered: isDistrictUncovered(district.id)
         }))
-        .filter(item => item.online);
+        .filter(item => item.uncovered);
 
       const unfinished = districtsWithVisibleTargets.filter(item => item.percent < 100 && item.intel.nextTarget);
       if (unfinished.length) {
@@ -403,7 +407,7 @@
 
       return {
         title: "Hunt rare pubs",
-        sub: "All visible districts are cleared — chase rare and legendary finds"
+        sub: "All uncovered districts are cleared — chase rare and legendary finds"
       };
     }
 
@@ -411,6 +415,8 @@
       clearLayers(districtLabels);
 
       districts.forEach(district => {
+        if (!isDistrictUncovered(district.id)) return;
+
         const label = L.marker([district.centerLat, district.centerLng], {
           interactive: false,
           icon: L.divIcon({
@@ -436,19 +442,19 @@
         const color = district ? district.color : "#ffd27a";
 
         const glow = L.circle([signal.lat, signal.lng], {
-          radius: SIGNAL_RADIUS_METERS * 1.22,
+          radius: SIGNAL_RADIUS_METERS * 1.28,
           stroke: false,
           fillColor: color,
-          fillOpacity: 0.05,
+          fillOpacity: 0.11,
           interactive: false
         }).addTo(map);
 
         const reveal = L.circle([signal.lat, signal.lng], {
           radius: SIGNAL_RADIUS_METERS,
           color,
-          weight: 1,
+          weight: 2,
           fillColor: color,
-          fillOpacity: 0.12,
+          fillOpacity: 0.18,
           interactive: false
         }).addTo(map);
 
@@ -558,10 +564,9 @@
       }
 
       drawerBodyEl.innerHTML = districts.map(district => {
-        const districtSignals = signals.filter(signal => signal.districtId === district.id);
-        const uncovered = districtSignals.some(signal => state.unlockedSignals.has(signal.id));
-        const visible = getDistrictVisiblePubs(district.id).length;
+        const uncovered = isDistrictUncovered(district.id);
         const total = getDistrictPubs(district.id).length;
+        const visible = getDistrictVisiblePubs(district.id).length;
         const visited = getDistrictVisitedPubs(district.id).length;
         const percent = getDistrictCompletionPercent(district.id);
         const rewards = getDistrictRewardState(district.id);
@@ -580,7 +585,7 @@
             </div>
 
             <div class="district-summary">
-              Known ${visible}/${total} · Visited ${visited}/${total}
+              ${uncovered ? `Known ${visible}/${total} · Visited ${visited}/${total}` : `Unknown · Visited ${visited}/${total}`}
             </div>
 
             <div class="progress district-progress">
@@ -598,15 +603,15 @@
             <div class="intel-card">
               <div class="intel-line">
                 <span>Best rare</span>
-                <strong>${intel.bestRare ? `${intel.bestRare.name} (${getPubRarity(intel.bestRare)})` : "No intel yet"}</strong>
+                <strong>${uncovered ? (intel.bestRare ? `${intel.bestRare.name} (${getPubRarity(intel.bestRare)})` : "No intel yet") : "Unknown"}</strong>
               </div>
               <div class="intel-line">
                 <span>Next target</span>
-                <strong>${intel.nextTarget ? intel.nextTarget.name : (uncovered ? "District cleared" : "Awaiting synchronisation")}</strong>
+                <strong>${uncovered ? (intel.nextTarget ? intel.nextTarget.name : "District cleared") : "Awaiting synchronisation"}</strong>
               </div>
               <div class="intel-line">
                 <span>Cheapest known</span>
-                <strong>${intel.cheapestKnown ? `${intel.cheapestKnown.pub.name} (£${Number(intel.cheapestKnown.latest.price).toFixed(2)})` : "No prices yet"}</strong>
+                <strong>${uncovered ? (intel.cheapestKnown ? `${intel.cheapestKnown.pub.name} (£${Number(intel.cheapestKnown.latest.price).toFixed(2)})` : "No prices yet") : "Unknown"}</strong>
               </div>
             </div>
           </div>
