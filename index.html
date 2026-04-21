@@ -27,11 +27,11 @@
 
   <aside class="panel hud">
     <div class="title">Signal Network</div>
-    <div class="sub">Synchronise Signals to uncover districts and reveal pubs.</div>
+    <div class="sub">Synchronise Signals to uncover Westminster and reveal pubs.</div>
 
     <div class="mission-card">
       <div class="mission-label">Current objective</div>
-      <div class="mission-title" id="missionTitle">Loading mission...</div>
+      <div class="mission-title" id="missionTitle">Loading mission…</div>
       <div class="mission-sub" id="missionSub">Please wait</div>
     </div>
 
@@ -63,7 +63,7 @@
       <button class="button-secondary" onclick="resetProgress()">Reset progress</button>
     </div>
 
-    <div class="muted top-gap" id="mapStatus">Move within 50m of a Signal to bring part of Westminster online.</div>
+    <div class="muted top-gap" id="mapStatus">Move within 50m of a Signal to uncover an area.</div>
   </aside>
 
   <aside class="panel drawer" id="districtDrawer">
@@ -93,7 +93,7 @@
       xp: "pint_signal_xp",
       rare: "pint_signal_rare_assignments",
       drawerOpen: "pint_signal_drawer_open",
-      pubPrices: "pint_signal_pub_prices"
+      prices: "pint_signal_price_log"
     };
 
     const REWARD_STEPS = [
@@ -108,7 +108,7 @@
       xp: Number(localStorage.getItem(STORAGE_KEYS.xp) || "0"),
       rareAssignments: JSON.parse(localStorage.getItem(STORAGE_KEYS.rare) || "{}"),
       drawerOpen: JSON.parse(localStorage.getItem(STORAGE_KEYS.drawerOpen) || "true"),
-      pubPrices: JSON.parse(localStorage.getItem(STORAGE_KEYS.pubPrices) || "[]")
+      prices: JSON.parse(localStorage.getItem(STORAGE_KEYS.prices) || "{}")
     };
 
     const map = L.map("map", {
@@ -195,16 +195,6 @@
       });
     }
 
-    function getPubPricesFor(pubId) {
-      return state.pubPrices.filter(entry => entry.pubId === pubId);
-    }
-
-    function getLatestPriceEntry(pubId) {
-      const items = getPubPricesFor(pubId);
-      if (!items.length) return null;
-      return [...items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
-    }
-
     function getPubRarity(pub) {
       if (!state.rareAssignments[pub.id]) {
         const hash = Array.from(pub.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
@@ -242,6 +232,13 @@
       if (rarity === "rare") return 3;
       if (rarity === "notable") return 2;
       return 1;
+    }
+
+    function getLatestPriceEntry(pubId) {
+      const history = Array.isArray(state.prices[pubId]) ? state.prices[pubId] : [];
+      if (!history.length) return null;
+
+      return [...history].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
     }
 
     function clearLayers(list) {
@@ -320,30 +317,30 @@
     }
 
     function getDistrictIntel(districtId) {
-      const districtPubs = getDistrictVisiblePubs(districtId);
+      const visiblePubs = getDistrictVisiblePubs(districtId);
 
-      if (!districtPubs.length) {
+      if (!visiblePubs.length) {
         return {
           bestRare: null,
           nextTarget: null,
-          newPriceLead: null
+          cheapestKnown: null
         };
       }
 
-      const unvisited = districtPubs.filter(pub => !state.visitedPubs.has(pub.id));
-      const bestRare = [...districtPubs].sort((a, b) => rarityRank(getPubRarity(b)) - rarityRank(getPubRarity(a)))[0] || null;
+      const bestRare = [...visiblePubs].sort((a, b) => rarityRank(getPubRarity(b)) - rarityRank(getPubRarity(a)))[0] || null;
+      const nextTarget = visiblePubs
+        .filter(pub => !state.visitedPubs.has(pub.id))
+        .sort((a, b) => rarityRank(getPubRarity(b)) - rarityRank(getPubRarity(a)))[0] || null;
 
-      const nextTarget = [...unvisited].sort((a, b) => rarityRank(getPubRarity(b)) - rarityRank(getPubRarity(a)))[0] || null;
-
-      const pubsWithPrices = districtPubs
+      const cheapestKnown = visiblePubs
         .map(pub => ({ pub, latest: getLatestPriceEntry(pub.id) }))
         .filter(item => item.latest && typeof item.latest.price === "number")
-        .sort((a, b) => a.latest.price - b.latest.price);
+        .sort((a, b) => a.latest.price - b.latest.price)[0] || null;
 
       return {
         bestRare,
         nextTarget,
-        newPriceLead: pubsWithPrices[0] || null
+        cheapestKnown
       };
     }
 
@@ -368,29 +365,28 @@
           const distance = Math.round(map.distance(userPos, [nearestLockedSignal.lat, nearestLockedSignal.lng]));
           return {
             title: `Synchronise ${nearestLockedSignal.name}`,
-            sub: `${distance}m away · First district unlock`
+            sub: `${distance}m away · First uncovered zone`
           };
         }
 
         return {
           title: "Unlock your first Signal",
-          sub: "Move close to any Signal to uncover your first area"
+          sub: "Move near any Signal to uncover your first part of Westminster"
         };
       }
 
-      const onlineDistricts = districts
+      const districtsWithVisibleTargets = districts
         .map(district => ({
           district,
-          completion: getDistrictCompletionPercent(district.id),
-          visiblePubs: getDistrictVisiblePubs(district.id),
+          percent: getDistrictCompletionPercent(district.id),
           intel: getDistrictIntel(district.id),
           online: signals.some(signal => signal.districtId === district.id && state.unlockedSignals.has(signal.id))
         }))
         .filter(item => item.online);
 
-      const unfinished = onlineDistricts.filter(item => item.completion < 100 && item.intel.nextTarget);
+      const unfinished = districtsWithVisibleTargets.filter(item => item.percent < 100 && item.intel.nextTarget);
       if (unfinished.length) {
-        const best = [...unfinished].sort((a, b) => b.completion - a.completion)[0];
+        const best = [...unfinished].sort((a, b) => b.percent - a.percent)[0];
         return {
           title: `Push ${best.district.name}`,
           sub: `Next target: ${best.intel.nextTarget.name}`
@@ -406,8 +402,8 @@
       }
 
       return {
-        title: "Survey the rare pubs",
-        sub: "All visible districts cleared — hunt high-tier pubs"
+        title: "Hunt rare pubs",
+        sub: "All visible districts are cleared — chase rare and legendary finds"
       };
     }
 
@@ -473,7 +469,7 @@
         }).addTo(map);
 
         marker.bindPopup(`
-          <div style="min-width:200px;">
+          <div style="min-width:210px;">
             <strong>${signal.name}</strong><br>
             ${district ? district.name : "District"}<br>
             ${unlocked ? "Synchronised ✓" : "Locked"}<br>
@@ -496,7 +492,7 @@
       state.xp += gain;
       saveState();
 
-      mapStatusEl.textContent = `${pub.name} discovered. +${gain} XP (${rarity})`;
+      mapStatusEl.textContent = `${pub.name} discovered. +${gain} XP (${rarity}).`;
       renderAll();
     }
 
@@ -548,7 +544,6 @@
       xpValueEl.textContent = String(state.xp);
       networkPercentTextEl.textContent = `${progress.toFixed(0)}%`;
       networkProgressFillEl.style.width = `${progress}%`;
-
       missionTitleEl.textContent = mission.title;
       missionSubEl.textContent = mission.sub;
     }
@@ -564,11 +559,11 @@
 
       drawerBodyEl.innerHTML = districts.map(district => {
         const districtSignals = signals.filter(signal => signal.districtId === district.id);
-        const online = districtSignals.some(signal => state.unlockedSignals.has(signal.id));
+        const uncovered = districtSignals.some(signal => state.unlockedSignals.has(signal.id));
         const visible = getDistrictVisiblePubs(district.id).length;
         const total = getDistrictPubs(district.id).length;
         const visited = getDistrictVisitedPubs(district.id).length;
-        const completion = getDistrictCompletionPercent(district.id);
+        const percent = getDistrictCompletionPercent(district.id);
         const rewards = getDistrictRewardState(district.id);
         const intel = getDistrictIntel(district.id);
 
@@ -579,15 +574,17 @@
                 <span class="district-dot" style="background:${district.color};"></span>
                 <span class="district-name">${district.name}</span>
               </div>
-              <span class="district-status ${online ? "district-online" : "district-offline"}">
-                ${online ? "Uncovered" : "Hidden"}
+              <span class="district-status ${uncovered ? "district-online" : "district-offline"}">
+                ${uncovered ? "Uncovered" : "Hidden"}
               </span>
             </div>
 
-            <div class="district-summary">Known ${visible}/${total} · Visited ${visited}/${total}</div>
+            <div class="district-summary">
+              Known ${visible}/${total} · Visited ${visited}/${total}
+            </div>
 
             <div class="progress district-progress">
-              <div class="progress-fill" style="width:${completion}%; background:${district.color};"></div>
+              <div class="progress-fill" style="width:${percent}%; background:${district.color};"></div>
             </div>
 
             <div class="reward-row">
@@ -605,11 +602,11 @@
               </div>
               <div class="intel-line">
                 <span>Next target</span>
-                <strong>${intel.nextTarget ? intel.nextTarget.name : (online ? "District cleared" : "Awaiting synchronisation")}</strong>
+                <strong>${intel.nextTarget ? intel.nextTarget.name : (uncovered ? "District cleared" : "Awaiting synchronisation")}</strong>
               </div>
               <div class="intel-line">
                 <span>Cheapest known</span>
-                <strong>${intel.newPriceLead ? `${intel.newPriceLead.pub.name} (£${Number(intel.newPriceLead.latest.price).toFixed(2)})` : "No prices yet"}</strong>
+                <strong>${intel.cheapestKnown ? `${intel.cheapestKnown.pub.name} (£${Number(intel.cheapestKnown.latest.price).toFixed(2)})` : "No prices yet"}</strong>
               </div>
             </div>
           </div>
@@ -636,12 +633,12 @@
         saveState();
 
         const district = getDistrictById(signal.districtId);
-        const revealed = getDistrictVisiblePubs(signal.districtId).length;
+        const revealedCount = getDistrictVisiblePubs(signal.districtId).length;
         const intel = getDistrictIntel(signal.districtId);
 
         mapStatusEl.textContent =
           `${signal.name} synchronised. ${district ? district.name : "District"} uncovered. +50 XP` +
-          `${revealed ? ` · ${revealed} pubs now visible` : ""}` +
+          `${revealedCount ? ` · ${revealedCount} pubs now visible` : ""}` +
           `${intel.nextTarget ? ` · Next target: ${intel.nextTarget.name}` : ""}`;
 
         renderAll();
