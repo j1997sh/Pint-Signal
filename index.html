@@ -14,6 +14,7 @@
         <div class="brand-title">Pint Signal</div>
         <div class="brand-subtitle">District Signal Network</div>
       </div>
+
       <nav class="menu">
         <a href="index.html">Map</a>
         <a href="passport.html">Passport</a>
@@ -59,8 +60,13 @@
     </div>
 
     <div class="hud-actions">
-      <button onclick="centerOnUser()">Center on me</button>
-      <button class="button-secondary" onclick="resetProgress()">Reset progress</button>
+      <button type="button" id="centerOnUserButton">Center on me</button>
+      <button type="button" class="button-secondary" id="resetProgressButton">Reset progress</button>
+    </div>
+
+    <div class="hud-actions" id="devActionsRow">
+      <button type="button" class="button-secondary" id="unlockNearestSignalButton">Unlock nearest</button>
+      <button type="button" class="button-secondary" id="unlockAllSignalsButton">Unlock all</button>
     </div>
 
     <div class="muted top-gap" id="mapStatus">Move within 50m of a Signal to uncover an area.</div>
@@ -84,6 +90,7 @@
     import { signals } from "./signals.js";
     import { districts, getDistrictById, getDistrictForPub } from "./districts.js";
 
+    const DEV_MODE = true;
     const SIGNAL_RADIUS_METERS = 450;
     const SIGNAL_UNLOCK_DISTANCE_METERS = 50;
 
@@ -114,7 +121,7 @@
     const map = L.map("map", {
       zoomControl: true,
       preferCanvas: true
-    }).setView([51.5007, -0.1290], 14);
+    }).setView([51.5007, -0.129], 14);
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: "&copy; OpenStreetMap & CARTO",
@@ -141,6 +148,15 @@
     const drawerBodyEl = document.getElementById("drawerBody");
     const drawerToggleEl = document.getElementById("drawerToggle");
     const districtDrawerEl = document.getElementById("districtDrawer");
+    const centerOnUserButtonEl = document.getElementById("centerOnUserButton");
+    const resetProgressButtonEl = document.getElementById("resetProgressButton");
+    const unlockNearestSignalButtonEl = document.getElementById("unlockNearestSignalButton");
+    const unlockAllSignalsButtonEl = document.getElementById("unlockAllSignalsButton");
+    const devActionsRowEl = document.getElementById("devActionsRow");
+
+    if (!DEV_MODE) {
+      devActionsRowEl.style.display = "none";
+    }
 
     function saveState() {
       localStorage.setItem(STORAGE_KEYS.signals, JSON.stringify([...state.unlockedSignals]));
@@ -349,10 +365,10 @@
     }
 
     function getNearestLockedSignal() {
-      if (!userPos) return null;
-
       const locked = signals.filter(signal => !state.unlockedSignals.has(signal.id));
       if (!locked.length) return null;
+
+      if (!userPos) return locked[0];
 
       return [...locked].sort((a, b) => {
         const da = map.distance(userPos, [a.lat, a.lng]);
@@ -375,7 +391,9 @@
 
         return {
           title: "Unlock your first Signal",
-          sub: "Move near any Signal to uncover your first part of Westminster"
+          sub: DEV_MODE
+            ? "Click a Signal or use the dev buttons to uncover your first district"
+            : "Move near any Signal to uncover your first part of Westminster"
         };
       }
 
@@ -402,6 +420,13 @@
         return {
           title: `Expand to ${nearestLockedSignal.name}`,
           sub: `${distance}m away · New territory available`
+        };
+      }
+
+      if (nearestLockedSignal) {
+        return {
+          title: `Expand to ${nearestLockedSignal.name}`,
+          sub: DEV_MODE ? "Use unlock controls to reveal more territory" : "Find the next Signal"
         };
       }
 
@@ -479,11 +504,18 @@
             <strong>${signal.name}</strong><br>
             ${district ? district.name : "District"}<br>
             ${unlocked ? "Synchronised ✓" : "Locked"}<br>
-            ${unlocked ? "Area uncovered." : "Move within 50m to unlock."}
+            ${DEV_MODE && !unlocked ? "Click to unlock in test mode." : (unlocked ? "Area uncovered." : "Move within 50m to unlock.")}
           </div>
         `);
 
-        marker.on("click", () => unlockSignal(signal));
+        marker.on("click", () => {
+          if (DEV_MODE) {
+            unlockSignalDirect(signal, true);
+          } else {
+            unlockSignalByDistance(signal);
+          }
+        });
+
         signalMarkers.push(marker);
       });
     }
@@ -619,7 +651,30 @@
       }).join("");
     }
 
-    function unlockSignal(signal) {
+    function unlockSignalDirect(signal, isDev = false) {
+      if (state.unlockedSignals.has(signal.id)) {
+        mapStatusEl.textContent = `${signal.name} is already synchronised.`;
+        return;
+      }
+
+      state.unlockedSignals.add(signal.id);
+      state.xp += 50;
+      saveState();
+
+      const district = getDistrictById(signal.districtId);
+      const revealedCount = getDistrictVisiblePubs(signal.districtId).length;
+      const intel = getDistrictIntel(signal.districtId);
+
+      mapStatusEl.textContent =
+        `${signal.name} synchronised. ${district ? district.name : "District"} uncovered. +50 XP` +
+        `${revealedCount ? ` · ${revealedCount} pubs now visible` : ""}` +
+        `${intel.nextTarget ? ` · Next target: ${intel.nextTarget.name}` : ""}` +
+        `${isDev ? " · DEV unlock" : ""}`;
+
+      renderAll();
+    }
+
+    function unlockSignalByDistance(signal) {
       if (!userPos) {
         mapStatusEl.textContent = "Enable location to activate Signals.";
         return;
@@ -632,51 +687,40 @@
         return;
       }
 
-      if (!state.unlockedSignals.has(signal.id)) {
-        state.unlockedSignals.add(signal.id);
-        state.xp += 50;
-        saveState();
-
-        const district = getDistrictById(signal.districtId);
-        const revealedCount = getDistrictVisiblePubs(signal.districtId).length;
-        const intel = getDistrictIntel(signal.districtId);
-
-        mapStatusEl.textContent =
-          `${signal.name} synchronised. ${district ? district.name : "District"} uncovered. +50 XP` +
-          `${revealedCount ? ` · ${revealedCount} pubs now visible` : ""}` +
-          `${intel.nextTarget ? ` · Next target: ${intel.nextTarget.name}` : ""}`;
-
-        renderAll();
-      } else {
-        mapStatusEl.textContent = `${signal.name} is already synchronised.`;
-      }
+      unlockSignalDirect(signal, false);
     }
 
-    navigator.geolocation.watchPosition(
-      pos => {
-        userPos = [pos.coords.latitude, pos.coords.longitude];
-
-        if (!userMarker) {
-          userMarker = L.marker(userPos).addTo(map).bindPopup("You are here");
-        } else {
-          userMarker.setLatLng(userPos);
-        }
-
-        renderHud();
-      },
-      () => {
-        mapStatusEl.textContent = "Location unavailable. Signals require location access.";
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 10000
+    function unlockNearestSignal() {
+      const target = getNearestLockedSignal();
+      if (!target) {
+        mapStatusEl.textContent = "All signals already synchronised.";
+        return;
       }
-    );
+      unlockSignalDirect(target, true);
+    }
+
+    function unlockAllSignals() {
+      const locked = signals.filter(signal => !state.unlockedSignals.has(signal.id));
+      if (!locked.length) {
+        mapStatusEl.textContent = "All signals already synchronised.";
+        return;
+      }
+
+      locked.forEach(signal => {
+        state.unlockedSignals.add(signal.id);
+        state.xp += 50;
+      });
+
+      saveState();
+      mapStatusEl.textContent = `All remaining signals synchronised. +${locked.length * 50} XP · DEV unlock`;
+      renderAll();
+    }
 
     function centerOnUser() {
       if (userPos) {
         map.setView(userPos, 16);
+      } else if (signals.length) {
+        map.setView([signals[0].lat, signals[0].lng], 15);
       }
     }
 
@@ -701,8 +745,39 @@
       renderDrawer();
     });
 
+    centerOnUserButtonEl.addEventListener("click", centerOnUser);
+    resetProgressButtonEl.addEventListener("click", resetProgress);
+    unlockNearestSignalButtonEl.addEventListener("click", unlockNearestSignal);
+    unlockAllSignalsButtonEl.addEventListener("click", unlockAllSignals);
+
     window.centerOnUser = centerOnUser;
     window.resetProgress = resetProgress;
+    window.unlockNearestSignal = unlockNearestSignal;
+    window.unlockAllSignals = unlockAllSignals;
+
+    navigator.geolocation.watchPosition(
+      pos => {
+        userPos = [pos.coords.latitude, pos.coords.longitude];
+
+        if (!userMarker) {
+          userMarker = L.marker(userPos).addTo(map).bindPopup("You are here");
+        } else {
+          userMarker.setLatLng(userPos);
+        }
+
+        renderHud();
+      },
+      () => {
+        mapStatusEl.textContent = DEV_MODE
+          ? "Location unavailable. Dev unlock is still enabled."
+          : "Location unavailable. Signals require location access.";
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 10000
+      }
+    );
 
     function renderAll() {
       renderDistrictLabels();
