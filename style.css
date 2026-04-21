@@ -96,7 +96,7 @@ a {
 
 .leaflet-control-zoom {
   border: none !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.35) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
 }
 
 .leaflet-control-zoom a {
@@ -107,9 +107,9 @@ a {
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: rgba(20,20,20,0.92);
+  background: rgba(20, 20, 20, 0.92);
   color: #f4efe6;
-  border: 1px solid rgba(255,215,120,0.12);
+  border: 1px solid rgba(255, 215, 120, 0.12);
 }
 
 /* =========================
@@ -123,22 +123,22 @@ a {
   z-index: 400;
   background:
     radial-gradient(circle at center,
-      rgba(0,0,0,0) 20%,
-      rgba(0,0,0,0.75) 85%);
+      rgba(0, 0, 0, 0) 20%,
+      rgba(0, 0, 0, 0.75) 85%);
 }
 
 /* =========================
-   MAP HUD / DRAWER
+   HUD + DRAWER
 ========================= */
 
 .panel {
   position: fixed;
   z-index: 2000;
   backdrop-filter: blur(18px);
-  background: rgba(18,18,18,0.68);
-  border: 1px solid rgba(255,215,120,0.12);
+  background: rgba(18, 18, 18, 0.68);
+  border: 1px solid rgba(255, 215, 120, 0.12);
   border-radius: 18px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 }
 
 .hud {
@@ -181,7 +181,7 @@ a {
 }
 
 /* =========================
-   GENERIC TEXT / UI
+   GENERIC UI
 ========================= */
 
 .title {
@@ -205,7 +205,7 @@ a {
 }
 
 button {
-  border: 1px solid rgba(255,215,120,0.2);
+  border: 1px solid rgba(255, 215, 120, 0.2);
   background: linear-gradient(#1e1814, #14110e);
   color: #fff3d8;
   padding: 10px 14px;
@@ -218,6 +218,11 @@ button:hover {
   background: linear-gradient(#2a211b, #1a1512);
 }
 
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .button-secondary {
   background: transparent;
 }
@@ -226,7 +231,7 @@ button:hover {
 .progress {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 
@@ -236,7 +241,7 @@ button:hover {
 }
 
 /* =========================
-   MAP HUD CONTENT
+   MAP HUD
 ========================= */
 
 .stats {
@@ -249,7 +254,7 @@ button:hover {
   flex: 1;
   padding: 8px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   text-align: center;
 }
 
@@ -265,13 +270,23 @@ button:hover {
   letter-spacing: 0.04em;
 }
 
+.progress-label-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: #bca98b;
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
 .mission-card {
   margin-top: 14px;
   margin-bottom: 14px;
   padding: 12px;
   border-radius: 14px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,215,120,0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 215, 120, 0.08);
 }
 
 .mission-label {
@@ -308,21 +323,8 @@ button:hover {
   padding: 10px;
   border-radius: 12px;
   margin-bottom: 8px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.04);
-}
-
-.district-toggle {
-  width: 100%;
-  padding: 0;
-  background: transparent;
-  border: none;
-  text-align: left;
-  border-radius: 0;
-}
-
-.district-toggle:hover {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .district-header,
@@ -344,12 +346,6 @@ button:hover {
   font-weight: 600;
 }
 
-.district-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .district-status {
   font-size: 11px;
   color: #bca98b;
@@ -361,12 +357,6 @@ button:hover {
 
 .district-offline {
   color: #8e8070;
-}
-
-.district-chevron {
-  font-size: 16px;
-  line-height: 1;
-  color: #d9c9a5;
 }
 
 .district-summary,
@@ -383,19 +373,13 @@ button:hover {
 
 .district-progress-bar {
   height: 8px;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   overflow: hidden;
 }
 
 .district-progress-fill {
   height: 100%;
-}
-
-.district-expanded {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255,255,255,0.05);
 }
 
 .reward-row {
@@ -410,30 +394,32 @@ button:hover {
   font-size: 11px;
   padding: 5px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .reward-unlocked {
-  background: rgba(255,215,120,0.12);
+  background: rgba(255, 215, 120, 0.12);
   color: #ffd27a;
-  border-color: rgba(255,215,120,0.20);
+  border-color: rgba(255, 215, 120, 0.2);
 }
 
 .reward-locked {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   color: #8f8579;
 }
 
 .intel-card,
 .passport-district-footer {
   margin-top: 10px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
   padding: 10px;
 }
 
 .intel-line,
-.passport-district-footer {
+.passport-district-footer,
+.detail-row,
+.history-row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -441,12 +427,16 @@ button:hover {
   color: #bca98b;
 }
 
-.intel-line + .intel-line {
-  margin-top: 6px;
+.intel-line + .intel-line,
+.detail-row + .detail-row,
+.history-row + .history-row {
+  margin-top: 8px;
 }
 
 .intel-line strong,
-.passport-district-footer strong {
+.passport-district-footer strong,
+.detail-row strong,
+.history-row strong {
   color: #fff2d8;
   text-align: right;
 }
@@ -504,7 +494,7 @@ button:hover {
 
 .signal-locked .signal-core {
   opacity: 0.42;
-  filter: grayscale(1) brightness(0.78) drop-shadow(0 2px 6px rgba(0,0,0,0.45));
+  filter: grayscale(1) brightness(0.78) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
 }
 
 .signal-locked .signal-ring {
@@ -515,7 +505,7 @@ button:hover {
   filter:
     drop-shadow(0 0 10px color-mix(in srgb, var(--signal-color) 70%, transparent))
     drop-shadow(0 0 18px color-mix(in srgb, var(--signal-color) 40%, transparent))
-    drop-shadow(0 4px 10px rgba(0,0,0,0.35));
+    drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
 }
 
 .signal-unlocked .signal-ring {
@@ -525,7 +515,7 @@ button:hover {
 .pint-marker-ac {
   font-size: 24px;
   line-height: 1;
-  filter: drop-shadow(0 0 8px rgba(255,191,94,0.30)) drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+  filter: drop-shadow(0 0 8px rgba(255, 191, 94, 0.3)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
 .pint-marker-ac.pub-visited {
@@ -538,29 +528,29 @@ button:hover {
 
 .rarity-notable,
 .rarity-notable-card {
-  box-shadow: inset 0 0 0 1px rgba(255,213,110,0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 213, 110, 0.08);
 }
 
 .rarity-notable {
-  filter: drop-shadow(0 0 10px rgba(255,213,110,0.35)) drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+  filter: drop-shadow(0 0 10px rgba(255, 213, 110, 0.35)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
 .rarity-rare,
 .rarity-rare-card {
-  box-shadow: inset 0 0 0 1px rgba(255,180,90,0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 180, 90, 0.12);
 }
 
 .rarity-rare {
-  filter: drop-shadow(0 0 12px rgba(255,180,90,0.55)) drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+  filter: drop-shadow(0 0 12px rgba(255, 180, 90, 0.55)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
 .rarity-legendary,
 .rarity-legendary-card {
-  box-shadow: inset 0 0 0 1px rgba(255,110,70,0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 110, 70, 0.16);
 }
 
 .rarity-legendary {
-  filter: drop-shadow(0 0 16px rgba(255,110,70,0.70)) drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+  filter: drop-shadow(0 0 16px rgba(255, 110, 70, 0.7)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
 .district-label {
@@ -568,13 +558,13 @@ button:hover {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255,239,214,0.50);
+  color: rgba(255, 239, 214, 0.5);
   text-align: center;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 
 /* =========================
-   PASSPORT PAGE
+   STANDARD PAGES
 ========================= */
 
 .page {
@@ -585,16 +575,12 @@ button:hover {
   padding: 0 16px;
 }
 
-.passport-page {
-  max-width: 1040px;
-}
-
 .card {
-  background: rgba(18,18,18,0.7);
+  background: rgba(18, 18, 18, 0.7);
   border-radius: 18px;
   padding: 18px;
   margin-bottom: 16px;
-  border: 1px solid rgba(255,215,120,0.08);
+  border: 1px solid rgba(255, 215, 120, 0.08);
   backdrop-filter: blur(16px);
 }
 
@@ -604,6 +590,35 @@ button:hover {
   letter-spacing: 0.08em;
   color: #bca98b;
   margin-bottom: 6px;
+}
+
+.panel-title {
+  font-size: 20px;
+  margin-bottom: 6px;
+  color: #fff3d8;
+  font-weight: 600;
+}
+
+.panel-sub {
+  font-size: 13px;
+  color: #bba98f;
+  margin-bottom: 12px;
+}
+
+.empty-state {
+  color: #bba98f;
+  text-align: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+}
+
+/* =========================
+   PASSPORT
+========================= */
+
+.passport-page {
+  max-width: 1040px;
 }
 
 .passport-hero-top {
@@ -630,7 +645,7 @@ button:hover {
 .passport-rank-chip {
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(255,215,120,0.10);
+  background: rgba(255, 215, 120, 0.1);
   color: #ffd27a;
   font-size: 13px;
   font-weight: 600;
@@ -645,7 +660,7 @@ button:hover {
 }
 
 .passport-hero-stat {
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 16px;
   padding: 14px;
 }
@@ -675,38 +690,39 @@ button:hover {
   gap: 12px;
 }
 
-.panel-title {
-  font-size: 20px;
-  margin-bottom: 6px;
-  color: #fff3d8;
-  font-weight: 600;
-}
-
-.panel-sub {
-  font-size: 13px;
-  color: #bba98f;
-  margin-bottom: 12px;
-}
-
 .test-actions-row {
   display: flex;
   gap: 10px;
   margin-top: 10px;
 }
 
-.passport-controls {
+.passport-controls,
+.pub-form-grid {
   display: grid;
   grid-template-columns: 1fr 190px;
   gap: 12px;
+}
+
+.pub-form-grid.single-column {
+  grid-template-columns: 1fr;
 }
 
 .passport-select {
   width: 100%;
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   color: #fff3d8;
+}
+
+.field-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #bba98f;
+  margin-bottom: 6px;
 }
 
 .passport-district-list {
@@ -716,8 +732,8 @@ button:hover {
 }
 
 .passport-district-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 18px;
   padding: 14px;
 }
@@ -731,8 +747,8 @@ button:hover {
 .rarity-card {
   border-radius: 16px;
   padding: 14px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .rarity-card span {
@@ -769,17 +785,17 @@ button:hover {
 }
 
 .stack-card {
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 16px;
   padding: 12px;
-  border: 1px solid rgba(255,255,255,0.04);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   color: #f5efe6;
   text-align: left;
   width: 100%;
 }
 
 .stack-card:hover {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .passive-card {
@@ -809,15 +825,15 @@ button:hover {
   width: 100%;
   text-align: left;
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.05);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   padding: 14px;
   color: #f5efe6;
   cursor: pointer;
 }
 
 .stamp-card:hover {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .stamp-card-top {
@@ -853,12 +869,88 @@ button:hover {
   align-self: flex-start;
 }
 
-.empty-state {
+/* =========================
+   PUB PAGE
+========================= */
+
+.pub-page {
+  max-width: 1100px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 12px;
+  color: #d9c9a5;
+}
+
+.back-link:hover {
+  color: #ffd27a;
+}
+
+.pub-hero-card {
+  margin-bottom: 18px;
+}
+
+.pub-hero-card .passport-title {
+  margin-bottom: 4px;
+}
+
+.pub-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.pub-meta-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.pub-meta-card span {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: #bba98f;
-  text-align: center;
-  padding: 16px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 14px;
+  margin-bottom: 6px;
+}
+
+.pub-meta-card strong {
+  font-size: 18px;
+  color: #fff3d8;
+}
+
+.pub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.price-hero {
+  font-size: 34px;
+  font-weight: 700;
+  color: #fff3d8;
+  margin-bottom: 14px;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff3d8;
+}
+
+.history-meta {
+  font-size: 12px;
+  color: #bba98f;
+  margin-top: 4px;
 }
 
 /* =========================
@@ -870,7 +962,7 @@ button:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,215,120,0.2);
+  background: rgba(255, 215, 120, 0.2);
   border-radius: 999px;
 }
 
@@ -883,7 +975,9 @@ button:hover {
   .rarity-grid,
   .passport-district-list,
   .stamp-book-list,
-  .rare-collection-layout {
+  .rare-collection-layout,
+  .pub-meta-grid,
+  .pub-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -914,7 +1008,6 @@ button:hover {
   .intel-line,
   .district-row-top,
   .district-header,
-  .district-right,
   .passport-hero-top,
   .passport-controls,
   .test-actions-row,
@@ -929,7 +1022,10 @@ button:hover {
   .rarity-grid,
   .passport-district-list,
   .stamp-book-list,
-  .rare-collection-layout {
+  .rare-collection-layout,
+  .pub-meta-grid,
+  .pub-grid,
+  .pub-form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -937,7 +1033,8 @@ button:hover {
     font-size: 24px;
   }
 
-  .passport-hero-stat strong {
+  .passport-hero-stat strong,
+  .price-hero {
     font-size: 24px;
   }
 }
