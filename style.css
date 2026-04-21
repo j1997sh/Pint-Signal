@@ -11,9 +11,9 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background: #0a0a0b;
-  color: #f5efe4;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: #06080b;
+  color: #eef3f7;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body {
@@ -34,14 +34,18 @@ a {
   top: 0;
   width: 100%;
   z-index: 3000;
-  background: rgba(10, 10, 10, 0.6);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 215, 120, 0.1);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 12, 18, 0.92),
+    rgba(6, 10, 16, 0.78)
+  );
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(120, 170, 220, 0.14);
 }
 
 .topbar-inner {
-  max-width: 1100px;
-  margin: auto;
+  max-width: 1120px;
+  margin: 0 auto;
   padding: 14px 20px;
   display: flex;
   justify-content: space-between;
@@ -49,23 +53,53 @@ a {
 }
 
 .brand-title {
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+  color: #f5fbff;
 }
 
 .brand-subtitle {
   font-size: 11px;
-  color: #bca98b;
+  color: #88a3ba;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .menu {
   display: flex;
-  gap: 18px;
-  font-size: 14px;
+  gap: 24px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #c7d7e5;
+}
+
+.menu a {
+  position: relative;
+  opacity: 0.9;
 }
 
 .menu a:hover {
-  color: #ffd27a;
+  color: #ffffff;
+  opacity: 1;
+}
+
+.menu a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 1px;
+  background: rgba(176, 220, 255, 0.5);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
+}
+
+.menu a:hover::after {
+  transform: scaleX(1);
 }
 
 /* =========================
@@ -79,8 +113,8 @@ a {
 }
 
 .leaflet-container {
-  filter: brightness(0.85) contrast(1.1) saturate(0.7);
-  background: #0a0a0b;
+  background: #05080b;
+  filter: brightness(0.78) contrast(1.18) saturate(0.42);
 }
 
 .leaflet-pane,
@@ -95,25 +129,33 @@ a {
 }
 
 .leaflet-control-zoom {
-  border: none !important;
+  border: 1px solid rgba(120, 170, 220, 0.14) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+  border-radius: 0 !important;
+  overflow: hidden;
 }
 
 .leaflet-control-zoom a {
-  background: rgba(18, 15, 13, 0.92) !important;
-  color: #f7e6c5 !important;
-  border-bottom: 1px solid rgba(255, 210, 122, 0.12) !important;
+  background: rgba(8, 12, 18, 0.95) !important;
+  color: #e8f6ff !important;
+  border-bottom: 1px solid rgba(120, 170, 220, 0.12) !important;
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: rgba(20, 20, 20, 0.92);
-  color: #f4efe6;
-  border: 1px solid rgba(255, 215, 120, 0.12);
+  background: rgba(10, 15, 22, 0.96);
+  color: #eef6ff;
+  border: 1px solid rgba(120, 170, 220, 0.14);
+  border-radius: 0;
+}
+
+.leaflet-popup-content {
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 /* =========================
-   FOG
+   FOG / MEMORY LAYER
 ========================= */
 
 .map-fog {
@@ -122,43 +164,48 @@ a {
   inset: 0;
   z-index: 400;
   background:
-    radial-gradient(circle at center,
-      rgba(0, 0, 0, 0) 20%,
-      rgba(0, 0, 0, 0.75) 85%);
+    radial-gradient(circle at center, rgba(0, 0, 0, 0) 22%, rgba(0, 0, 0, 0.48) 72%, rgba(0, 0, 0, 0.72) 100%),
+    linear-gradient(180deg, rgba(18, 38, 58, 0.06), rgba(0, 0, 0, 0) 18%, rgba(0, 0, 0, 0) 82%, rgba(18, 38, 58, 0.06));
 }
 
 /* =========================
-   HUD + DRAWER
+   PANELS
 ========================= */
 
 .panel {
   position: fixed;
   z-index: 2000;
-  backdrop-filter: blur(18px);
-  background: rgba(18, 18, 18, 0.68);
-  border: 1px solid rgba(255, 215, 120, 0.12);
-  border-radius: 18px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 12, 18, 0.9),
+    rgba(8, 11, 17, 0.82)
+  );
+  border: 1px solid rgba(120, 170, 220, 0.14);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(200, 240, 255, 0.03);
+  backdrop-filter: blur(8px);
+  border-radius: 0;
 }
 
 .hud {
-  top: 80px;
-  left: 20px;
-  width: 300px;
-  padding: 16px;
+  top: 88px;
+  left: 16px;
+  width: 266px;
+  padding: 14px;
 }
 
 .drawer {
-  left: 20px;
-  bottom: 20px;
-  width: 360px;
-  max-height: 46vh;
+  left: 16px;
+  bottom: 16px;
+  width: 286px;
+  max-height: 44vh;
   overflow-y: auto;
   padding: 14px;
 }
 
 .drawer-collapsed {
-  max-height: 74px;
+  max-height: 72px;
   overflow: hidden;
 }
 
@@ -166,56 +213,73 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 10px;
-}
-
-.drawer-collapsed .drawer-top {
-  margin-bottom: 0;
 }
 
 .drawer-toggle {
   width: auto;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 7px 10px;
+  font-size: 11px;
+  min-width: 66px;
 }
 
 /* =========================
-   GENERIC UI
+   TYPE
 ========================= */
 
 .title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   margin-bottom: 6px;
+  color: #f5fbff;
 }
 
 .sub {
   font-size: 12px;
-  color: #bca98b;
+  color: #8da5b8;
+  line-height: 1.4;
 }
 
 .muted {
-  color: #9e8f77;
+  color: #7d93a7;
   font-size: 12px;
+  line-height: 1.4;
 }
 
 .top-gap {
   margin-top: 12px;
 }
 
+/* =========================
+   BUTTONS
+========================= */
+
 button {
-  border: 1px solid rgba(255, 215, 120, 0.2);
-  background: linear-gradient(#1e1814, #14110e);
-  color: #fff3d8;
-  padding: 10px 14px;
+  border: 1px solid rgba(125, 175, 220, 0.22);
+  background: linear-gradient(
+    180deg,
+    rgba(12, 18, 27, 0.96),
+    rgba(8, 13, 20, 0.96)
+  );
+  color: #eaf7ff;
+  padding: 10px 12px;
   border-radius: 999px;
   cursor: pointer;
   font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }
 
 button:hover {
-  background: linear-gradient(#2a211b, #1a1512);
+  border-color: rgba(170, 220, 255, 0.45);
+  background: linear-gradient(
+    180deg,
+    rgba(17, 26, 38, 0.98),
+    rgba(10, 16, 24, 0.98)
+  );
 }
 
 button:disabled {
@@ -224,25 +288,42 @@ button:disabled {
 }
 
 .button-secondary {
-  background: transparent;
-}
-
-.progress-bar,
-.progress {
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #ffb347, #ffd27a);
+  background: rgba(0, 0, 0, 0.1);
 }
 
 /* =========================
-   MAP HUD
+   HUD
 ========================= */
+
+.mission-card {
+  margin-top: 14px;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(120, 170, 220, 0.12);
+  border-radius: 0;
+}
+
+.mission-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #8fa8bb;
+  margin-bottom: 6px;
+}
+
+.mission-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f4fbff;
+  margin-bottom: 4px;
+}
+
+.mission-sub {
+  font-size: 12px;
+  color: #8da5b8;
+  line-height: 1.4;
+}
 
 .stats {
   display: flex;
@@ -252,79 +333,68 @@ button:disabled {
 
 .stat {
   flex: 1;
-  padding: 8px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(120, 170, 220, 0.08);
   text-align: center;
+  min-height: 60px;
 }
 
 .stat strong {
   display: block;
-  font-size: 16px;
+  font-size: 18px;
+  color: #ffffff;
+  line-height: 1.1;
 }
 
 .stat span {
+  display: block;
+  margin-top: 5px;
   font-size: 10px;
-  color: #bca98b;
+  color: #8fa8bb;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 
 .progress-label-row {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  font-size: 12px;
-  color: #bca98b;
+  font-size: 11px;
+  color: #8da5b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   margin-top: 12px;
   margin-bottom: 6px;
 }
 
-.mission-card {
-  margin-top: 14px;
-  margin-bottom: 14px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 215, 120, 0.08);
+.progress,
+.progress-bar {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
 }
 
-.mission-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #bca98b;
-  margin-bottom: 6px;
-}
-
-.mission-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff2d8;
-  margin-bottom: 4px;
-}
-
-.mission-sub {
-  font-size: 12px;
-  color: #bca98b;
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #78c7ff, #f0f7ff);
 }
 
 .hud-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* =========================
-   DISTRICT DRAWER
+   DRAWER / DISTRICTS
 ========================= */
 
 .district {
   padding: 10px;
-  border-radius: 12px;
   margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(120, 170, 220, 0.08);
 }
 
 .district-header,
@@ -332,7 +402,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .district-name-wrap {
@@ -344,26 +414,29 @@ button:disabled {
 .district-name {
   font-size: 13px;
   font-weight: 600;
+  color: #f3faff;
 }
 
 .district-status {
   font-size: 11px;
-  color: #bca98b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .district-online {
-  color: #ffd27a;
+  color: #c7ecff;
 }
 
 .district-offline {
-  color: #8e8070;
+  color: #6d8091;
 }
 
 .district-summary,
 .district-meta {
   margin-top: 6px;
   font-size: 12px;
-  color: #bca98b;
+  color: #8da5b8;
+  line-height: 1.35;
 }
 
 .district-progress,
@@ -372,9 +445,8 @@ button:disabled {
 }
 
 .district-progress-bar {
-  height: 8px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
   overflow: hidden;
 }
 
@@ -384,35 +456,35 @@ button:disabled {
 
 .reward-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   margin-top: 10px;
   margin-bottom: 10px;
 }
 
 .reward-pill {
-  font-size: 11px;
-  padding: 5px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  padding: 4px 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(120, 170, 220, 0.12);
 }
 
 .reward-unlocked {
-  background: rgba(255, 215, 120, 0.12);
-  color: #ffd27a;
-  border-color: rgba(255, 215, 120, 0.2);
+  background: rgba(120, 199, 255, 0.08);
+  color: #dff3ff;
 }
 
 .reward-locked {
-  background: rgba(255, 255, 255, 0.03);
-  color: #8f8579;
+  background: rgba(255, 255, 255, 0.02);
+  color: #74889b;
 }
 
 .intel-card,
 .passport-district-footer {
   margin-top: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(120, 170, 220, 0.08);
   padding: 10px;
 }
 
@@ -424,7 +496,7 @@ button:disabled {
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
-  color: #bca98b;
+  color: #8da5b8;
 }
 
 .intel-line + .intel-line,
@@ -437,19 +509,19 @@ button:disabled {
 .passport-district-footer strong,
 .detail-row strong,
 .history-row strong {
-  color: #fff2d8;
+  color: #f5fbff;
   text-align: right;
 }
 
 .district-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   display: inline-block;
 }
 
 /* =========================
-   MAP MARKERS / LABELS
+   MAP MARKERS
 ========================= */
 
 .signal-marker-wrap,
@@ -460,97 +532,74 @@ button:disabled {
 }
 
 .signal-marker {
-  --signal-color: #d4a24c;
   position: relative;
-  width: 54px;
-  height: 54px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .signal-core {
-  position: relative;
-  z-index: 3;
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
-}
-
-.signal-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--signal-color) 60%, transparent);
-}
-
-.signal-ring-1 {
-  width: 34px;
-  height: 34px;
-}
-
-.signal-ring-2 {
-  width: 46px;
-  height: 46px;
+  font-weight: 700;
+  color: #eaf8ff;
+  text-shadow:
+    0 0 8px rgba(120, 199, 255, 0.15),
+    0 0 16px rgba(120, 199, 255, 0.08);
 }
 
 .signal-locked .signal-core {
-  opacity: 0.42;
-  filter: grayscale(1) brightness(0.78) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
-}
-
-.signal-locked .signal-ring {
-  opacity: 0.14;
+  color: rgba(200, 220, 235, 0.36);
+  text-shadow: none;
 }
 
 .signal-unlocked .signal-core {
-  filter:
-    drop-shadow(0 0 10px color-mix(in srgb, var(--signal-color) 70%, transparent))
-    drop-shadow(0 0 18px color-mix(in srgb, var(--signal-color) 40%, transparent))
-    drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
-}
-
-.signal-unlocked .signal-ring {
-  opacity: 0.56;
+  color: #f6fbff;
+  text-shadow:
+    0 0 8px rgba(150, 220, 255, 0.18),
+    0 0 18px rgba(150, 220, 255, 0.1);
 }
 
 .pint-marker-ac {
-  font-size: 24px;
-  line-height: 1;
-  filter: drop-shadow(0 0 8px rgba(255, 191, 94, 0.3)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e8f8ff;
+  background: rgba(14, 26, 38, 0.94);
+  border: 1px solid rgba(145, 205, 245, 0.3);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
 .pint-marker-ac.pub-visited {
-  transform: scale(1.12);
+  background: rgba(22, 42, 62, 0.96);
+  border-color: rgba(200, 240, 255, 0.45);
 }
 
 .rarity-common {
-  opacity: 0.9;
-}
-
-.rarity-notable,
-.rarity-notable-card {
-  box-shadow: inset 0 0 0 1px rgba(255, 213, 110, 0.08);
+  opacity: 0.88;
 }
 
 .rarity-notable {
-  filter: drop-shadow(0 0 10px rgba(255, 213, 110, 0.35)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
-}
-
-.rarity-rare,
-.rarity-rare-card {
-  box-shadow: inset 0 0 0 1px rgba(255, 180, 90, 0.12);
+  border-color: rgba(160, 220, 255, 0.45);
 }
 
 .rarity-rare {
-  filter: drop-shadow(0 0 12px rgba(255, 180, 90, 0.55)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
-}
-
-.rarity-legendary,
-.rarity-legendary-card {
-  box-shadow: inset 0 0 0 1px rgba(255, 110, 70, 0.16);
+  border-color: rgba(215, 245, 255, 0.62);
+  box-shadow: 0 0 10px rgba(140, 220, 255, 0.12);
 }
 
 .rarity-legendary {
-  filter: drop-shadow(0 0 16px rgba(255, 110, 70, 0.7)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+  border-color: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 0 12px rgba(190, 240, 255, 0.18),
+    0 0 24px rgba(120, 199, 255, 0.08);
 }
 
 .district-label {
@@ -558,9 +607,9 @@ button:disabled {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 239, 214, 0.5);
+  color: rgba(220, 240, 255, 0.75);
   text-align: center;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
 /* =========================
@@ -576,41 +625,45 @@ button:disabled {
 }
 
 .card {
-  background: rgba(18, 18, 18, 0.7);
-  border-radius: 18px;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 12, 18, 0.9),
+    rgba(8, 11, 17, 0.82)
+  );
+  border: 1px solid rgba(120, 170, 220, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   padding: 18px;
   margin-bottom: 16px;
-  border: 1px solid rgba(255, 215, 120, 0.08);
-  backdrop-filter: blur(16px);
 }
 
 .section-kicker {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #bca98b;
+  letter-spacing: 0.1em;
+  color: #8fa8bb;
   margin-bottom: 6px;
 }
 
 .panel-title {
   font-size: 20px;
   margin-bottom: 6px;
-  color: #fff3d8;
-  font-weight: 600;
+  color: #f5fbff;
+  font-weight: 700;
 }
 
 .panel-sub {
   font-size: 13px;
-  color: #bba98f;
+  color: #8da5b8;
   margin-bottom: 12px;
+  line-height: 1.45;
 }
 
 .empty-state {
-  color: #bba98f;
+  color: #8da5b8;
   text-align: center;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(120, 170, 220, 0.08);
 }
 
 /* =========================
@@ -632,21 +685,21 @@ button:disabled {
   margin: 0;
   font-size: 30px;
   font-weight: 700;
-  color: #fff3d8;
+  color: #f5fbff;
   line-height: 1.1;
 }
 
 .passport-subtitle {
   margin: 8px 0 0;
-  color: #bba98f;
+  color: #8da5b8;
   font-size: 14px;
 }
 
 .passport-rank-chip {
   padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(255, 215, 120, 0.1);
-  color: #ffd27a;
+  border: 1px solid rgba(120, 170, 220, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d9eefb;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -660,8 +713,8 @@ button:disabled {
 }
 
 .passport-hero-stat {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(120, 170, 220, 0.08);
   padding: 14px;
 }
 
@@ -670,13 +723,13 @@ button:disabled {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #bba98f;
+  color: #8fa8bb;
   margin-bottom: 6px;
 }
 
 .passport-hero-stat strong {
   font-size: 28px;
-  color: #fff3d8;
+  color: #f5fbff;
 }
 
 .passport-main-progress {
@@ -710,10 +763,9 @@ button:disabled {
 .passport-select {
   width: 100%;
   padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff3d8;
+  border: 1px solid rgba(120, 170, 220, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: #f1fbff;
 }
 
 .field-label {
@@ -721,7 +773,7 @@ button:disabled {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #bba98f;
+  color: #8fa8bb;
   margin-bottom: 6px;
 }
 
@@ -732,9 +784,8 @@ button:disabled {
 }
 
 .passport-district-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(120, 170, 220, 0.08);
   padding: 14px;
 }
 
@@ -745,23 +796,22 @@ button:disabled {
 }
 
 .rarity-card {
-  border-radius: 16px;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(120, 170, 220, 0.08);
 }
 
 .rarity-card span {
   display: block;
   font-size: 12px;
-  color: #bba98f;
+  color: #8da5b8;
   margin-bottom: 6px;
 }
 
 .rarity-card strong {
   display: block;
   font-size: 24px;
-  color: #fff3d8;
+  color: #f5fbff;
 }
 
 .rare-collection-layout {
@@ -773,9 +823,11 @@ button:disabled {
 
 .subsection-title {
   font-size: 14px;
-  font-weight: 600;
-  color: #fff3d8;
+  font-weight: 700;
+  color: #f5fbff;
   margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .stack-book-list {
@@ -785,17 +837,16 @@ button:disabled {
 }
 
 .stack-card {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(120, 170, 220, 0.08);
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  color: #f5efe6;
+  color: #eef6fb;
   text-align: left;
   width: 100%;
 }
 
 .stack-card:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .passive-card {
@@ -805,13 +856,13 @@ button:disabled {
 .stack-title {
   font-size: 16px;
   font-weight: 700;
-  color: #fff4df;
+  color: #f5fbff;
   margin-bottom: 4px;
 }
 
 .stack-meta {
   font-size: 13px;
-  color: #bba98f;
+  color: #8da5b8;
 }
 
 .stamp-book-list {
@@ -824,16 +875,15 @@ button:disabled {
 .stamp-card {
   width: 100%;
   text-align: left;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(120, 170, 220, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   padding: 14px;
-  color: #f5efe6;
+  color: #eef6fb;
   cursor: pointer;
 }
 
 .stamp-card:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .stamp-card-top {
@@ -845,19 +895,19 @@ button:disabled {
 .stamp-title {
   font-size: 16px;
   font-weight: 700;
-  color: #fff4df;
+  color: #f5fbff;
 }
 
 .stamp-meta {
   margin-top: 4px;
   font-size: 13px;
-  color: #bba98f;
+  color: #8da5b8;
 }
 
 .stamp-address {
   margin-top: 10px;
   font-size: 13px;
-  color: #9f9486;
+  color: #7890a3;
 }
 
 .stamp-rarity {
@@ -865,8 +915,8 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 6px 8px;
-  border-radius: 999px;
   align-self: flex-start;
+  border: 1px solid rgba(120, 170, 220, 0.14);
 }
 
 /* =========================
@@ -880,11 +930,11 @@ button:disabled {
 .back-link {
   display: inline-block;
   margin-bottom: 12px;
-  color: #d9c9a5;
+  color: #c4dceb;
 }
 
 .back-link:hover {
-  color: #ffd27a;
+  color: #ffffff;
 }
 
 .pub-hero-card {
@@ -903,8 +953,8 @@ button:disabled {
 }
 
 .pub-meta-card {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(120, 170, 220, 0.08);
   padding: 14px;
 }
 
@@ -913,13 +963,13 @@ button:disabled {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #bba98f;
+  color: #8fa8bb;
   margin-bottom: 6px;
 }
 
 .pub-meta-card strong {
   font-size: 18px;
-  color: #fff3d8;
+  color: #f5fbff;
 }
 
 .pub-grid {
@@ -931,7 +981,7 @@ button:disabled {
 .price-hero {
   font-size: 34px;
   font-weight: 700;
-  color: #fff3d8;
+  color: #f5fbff;
   margin-bottom: 14px;
 }
 
@@ -943,13 +993,13 @@ button:disabled {
 
 .history-title {
   font-size: 14px;
-  font-weight: 600;
-  color: #fff3d8;
+  font-weight: 700;
+  color: #f5fbff;
 }
 
 .history-meta {
   font-size: 12px;
-  color: #bba98f;
+  color: #8da5b8;
   margin-top: 4px;
 }
 
@@ -962,8 +1012,7 @@ button:disabled {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 215, 120, 0.2);
-  border-radius: 999px;
+  background: rgba(120, 170, 220, 0.28);
 }
 
 /* =========================
